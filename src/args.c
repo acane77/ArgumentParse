@@ -28,6 +28,7 @@ typedef struct arg_info {
 	int         short_term;
 	int         min_parameter_count;
 	int         max_parameter_count;
+    int         directive_flag;   // treat all flags after into parameter of this flag
 	void        (*process)(int parac, const char** parav); // no free parav!
 } arg_info_t;
 
@@ -189,6 +190,7 @@ struct args_context {
 
     // process positional args
     void (*process_positional)(int index, const char* arg);
+    int (*process_directive_positional)(int index, int argc, const char** argv); // returns 1 if processed directive
     int positional_minc;
     int positional_maxc;
 };
@@ -201,6 +203,7 @@ args_context_t* init_args_context() {
 	ctx->current_arg = NULL;
     ctx->error_handle = NULL;
     ctx->process_positional = NULL;
+    ctx->process_directive_positional = NULL;
     ctx->positional_maxc = 0;
     ctx->positional_minc = 0;
     ctx->remove_ambiguous = 0;
@@ -224,7 +227,7 @@ int argparse_set_positional_args(args_context_t* ctx, int minc, int maxc) {
 
 int regsiter_parameter_on_graph(args_context_t* ctx, const char* param,
 		const char* description, int minc, int maxc,
-		void (*process)(int parac, const char** parav), int is_long_term) {
+		void (*process)(int parac, const char** parav), int is_long_term, int is_directive) {
 	ctx_node_t* final_node = ctx_graph_add_nodes(ctx->ctx_graph, param);
 	if (!final_node) {
 		LOGE("add node for --%s failed", param);
@@ -243,32 +246,46 @@ int regsiter_parameter_on_graph(args_context_t* ctx, const char* param,
 	final_node->arg_info.max_parameter_count = maxc;
 	final_node->arg_info.min_parameter_count = minc;
 	final_node->arg_info.process = process;
+    final_node->arg_info.directive_flag = is_directive;
 	return OK;
+}
+
+int add_parameter_with_args_(args_context_t* ctx, const char* long_term, char short_term,
+                            const char* description, int minc, int maxc,
+                            void (*process)(int parac, const char** parav),
+                            int is_directive) {
+    if (!ctx) return FAIL;
+    if (!long_term && !short_term) {
+        LOGE("at least one of long_term and short_term should be provided");
+        return FAIL;
+    }
+    // register short term
+    if (short_term) {
+        char __short_term[2] = { 0, 0 };
+        __short_term[0] = short_term;
+        int ret = regsiter_parameter_on_graph(ctx, __short_term, description, minc, maxc, process, 0, is_directive);
+        if (ret != OK)
+            return ret;
+    }
+    // register long term
+    if (long_term) {
+        int ret = regsiter_parameter_on_graph(ctx, long_term, description, minc, maxc, process, 1, is_directive);
+        if (ret != OK)
+            return ret;
+    }
+    return OK;
 }
 
 int add_parameter_with_args(args_context_t* ctx, const char* long_term, char short_term,
 				  const char* description, int minc, int maxc,
 				  void (*process)(int parac, const char** parav)) {
-	if (!ctx) return FAIL;
-	if (!long_term && !short_term) {
-		LOGE("at least one of long_term and short_term should be provided");
-		return FAIL;
-	}
-	// register short term
-	if (short_term) {
-		char __short_term[2] = { 0, 0 };
-		__short_term[0] = short_term;
-		int ret = regsiter_parameter_on_graph(ctx, __short_term, description, minc, maxc, process, 0);
-		if (ret != OK)
-			return ret;
-	}
-	// register long term
-	if (long_term) {
-		int ret = regsiter_parameter_on_graph(ctx, long_term, description, minc, maxc, process, 1);
-		if (ret != OK)
-			return ret;
-	}
-	return OK;
+	return add_parameter_with_args_(ctx, long_term, short_term, description, minc, maxc, process, 0);
+}
+
+int argparse_add_parameter_directive(args_context_t* ctx, const char* long_term, char short_term,
+                                     const char* description, void (*process)(int parac, const char** parav)) {
+    return add_parameter_with_args_(ctx, long_term, short_term, description, 0, PARAMETER_ARGS_COUNT_NO_LIMIT,
+                                    process, 1);
 }
 
 int argparse_add_parameter(args_context_t* ctx, const char* long_term, char short_term,
@@ -407,7 +424,13 @@ void process_if_no_args(args_context_t* ctx) {
     } \
     ctx->current_arg = argi;\
     /* process if no need args */\
-    process_if_no_args(ctx);      \
+    process_if_no_args(ctx);                         \
+    /* process directive, return directly */\
+    /* for example,   git add [-A "xxxxxx"]  */\
+    if (ctx->current_arg && ctx->current_arg->directive_flag) {\
+        ctx->current_arg->process(argc - __last_arg_idx, argv + __last_arg_idx);\
+        return OK;\
+    }                                                     \
 } while (0)
 
 int parse_args(args_context_t* ctx, int argc, const char** argv) {
@@ -462,6 +485,7 @@ int parse_args(args_context_t* ctx, int argc, const char** argv) {
                     char __s[2] = {0, 0};  __s[0] = *arg;
                     LOG("process -%s", __s);
                     GET_PARAMETER_FROM_GRAPH_AND_CHECK(__s);
+
                 }
 			}
 
@@ -476,7 +500,15 @@ int parse_args(args_context_t* ctx, int argc, const char** argv) {
                 if (ctx->positional_maxc < __global_positonal_argc + 1) {
                     PARSEARG_REPORT_ERROR("unknown positional arg: %s", arg);
                 }
-                ctx->process_positional(__global_positonal_argc++, arg);
+                if (ctx->process_directive_positional) {
+                    // process as `git commit [-m "sadsadsa"]`
+                    if (ctx->process_directive_positional(__global_positonal_argc, argc - i, argv + i)) {
+                        return OK;
+                    }
+                }
+                if (ctx->process_positional)
+                    ctx->process_positional(__global_positonal_argc, arg);
+                __global_positonal_argc++;
             }
             // if is args for certain parameters
             else {
@@ -509,6 +541,11 @@ final_check:
 
 int argparse_set_positional_arg_process(args_context_t* ctx, void (*process)(int index, const char* arg)) {
     ctx->process_positional = process;
+    return OK;
+}
+
+int argparse_set_directive_positional_arg_process(args_context_t* ctx, int (*process)(int index, int argc, const char** argv)) {
+    ctx->process_directive_positional = process;
     return OK;
 }
 

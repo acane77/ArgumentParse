@@ -1,6 +1,7 @@
 #include "args.h"
 #include <stdlib.h>
 #include <stdio.h>
+#include <string.h>
 
 args_context_t* ctx;
 
@@ -32,6 +33,61 @@ void cb_process_version(int parac, const char** parav) {
     printf("version 1.3.14\n");
     exit(0);
 }
+void show_help_for_add(int parac, const char** parav) {
+    printf("This is help for --add or build");
+    exit(0);
+}
+int cb_error_report(const char* __msg) {
+    printf("error: %s\n", __msg);
+    return 0;
+}
+
+void cb_process_positional(int index, const char* arg) {
+    printf("opening file #%d:  %s\n", index, arg);
+}
+
+int cb_process_direcive_positional(int index, int argc, const char** argv) {
+    if (index == 0 && !strcmp(*argv, "build")) {
+        printf("args  \n");
+        for (int i = 0; i < argc; i++) {
+            printf("   [%d] %s\n", i, argv[i]);
+        }
+
+        args_context_t* ctx = init_args_context();
+        argparse_add_parameter(ctx, "help", 'h', "Show help message", 0, 0, show_help_for_add);
+        argparse_set_error_handle(ctx, cb_error_report);
+        argparse_set_positional_arg_process(ctx, cb_process_positional);
+        argparse_set_directive_positional_arg_process(ctx, cb_process_direcive_positional);
+        if (!parse_args(ctx, argc, argv)) {
+            printf("usage: test build [--help]\n");
+            printf("type `%s build --help` for more information\n", argv[0]);
+            deinit_args_context(ctx);
+            exit(1);
+        }
+        deinit_args_context(ctx);
+
+        return 1;
+    }
+    return 0;
+}
+void cb_process_add(int parac, const char** parav) {
+    printf("args  \n");
+    for (int i = 0; i < parac; i++) {
+        printf("   [%d] %s\n", i, parav[i]);
+    }
+    args_context_t* ctx = init_args_context();
+    argparse_add_parameter(ctx, "help", 'h', "Show help message", 0, 0, show_help_for_add);
+    argparse_set_error_handle(ctx, cb_error_report);
+    argparse_set_positional_arg_process(ctx, cb_process_positional);
+    argparse_set_directive_positional_arg_process(ctx, cb_process_direcive_positional);
+    if (!parse_args(ctx, parac, parav)) {
+        printf("usage: test build [--help]\n");
+        printf("type `%s build --help` for more information\n", parav[0]);
+        deinit_args_context(ctx);
+        exit(1);
+    }
+    deinit_args_context(ctx);
+}
 void cb_process_encoding(int parac, const char** parav) {
     printf("set encoding to %s (-E)\n", parav[0]);
 }
@@ -55,14 +111,7 @@ Options:
     exit(0);
 }
 
-int cb_error_report(const char* __msg) {
-    printf("error: %s\n", __msg);
-    return 0;
-}
 
-void cb_process_positional(int index, const char* arg) {
-    printf("opening file #%d:  %s\n", index, arg);
-}
 
 
 void argument_parse(int argc, const char** argv) {
@@ -75,8 +124,10 @@ void argument_parse(int argc, const char** argv) {
     argparse_add_parameter(ctx, "verbose", 'v', "Use this flag to set verbose level", 0, 0, cb_process_verbose);
     argparse_add_parameter(ctx, "version", 0, "Version", 0, 0, cb_process_version);
     argparse_add_parameter(ctx, NULL, 'E', "Set encoding", 1, 1, cb_process_encoding);
+    argparse_add_parameter_directive(ctx, "add", 'a', "Add", cb_process_add);
     argparse_set_error_handle(ctx, cb_error_report);
     argparse_set_positional_arg_process(ctx, cb_process_positional);
+    argparse_set_directive_positional_arg_process(ctx, cb_process_direcive_positional);
     argparse_set_positional_args(ctx, 1, 100);
     argparse_enable_remove_ambiguous(ctx);
     if (!parse_args(ctx, argc, argv)) {

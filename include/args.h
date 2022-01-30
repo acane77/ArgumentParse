@@ -98,6 +98,16 @@ int argparse_add_parameter_short_term_with_args(args_context_t* ctx, char short_
                     const char* description, int minc, int maxc,
                     void (*process)(int parac, const char** parav));
 
+/// Add directive meta information
+/// \param ctx          pointer to context
+/// \param long_term    long term of the argument (e.g., --flag)
+/// \param short_term   short term of the argument (e.g., -f)
+/// \param description  description
+/// \param process      callback to process function (this function returns 1 if is processed by directive)
+/// \return OK or FAIL
+int argparse_add_parameter_directive(args_context_t* ctx, const char* long_term, char short_term,
+                                     const char* description, void (*process)(int parac, const char** parav));
+
 /// Enable remove ambiguous (--) flags
 /// \param ctx   pointer to context
 void argparse_enable_remove_ambiguous(args_context_t* ctx);
@@ -113,6 +123,12 @@ int argparse_set_error_handle(args_context_t* ctx, int (*hnd)(const char* __msg)
 /// \param process   callback to process function (index: index of global positional arg, the arg)
 /// \return OK or FAIL
 int argparse_set_positional_arg_process(args_context_t* ctx, void (*process)(int index, const char* arg));
+
+/// Set callback to handle directive positional args
+/// \param ctx       pointer to context
+/// \param process   callback to process function (this function returns 1 if is processed by directive)
+/// \return
+int argparse_set_directive_positional_arg_process(args_context_t* ctx, int (*process)(int index, int argc, const char** argv));
 
 /// Parse arguments
 /// \param ctx   pointer to context
