@@ -52,7 +52,6 @@ int cb_process_direcive_positional(int index, int argc, const char** argv) {
         for (int i = 0; i < argc; i++) {
             printf("   [%d] %s\n", i, argv[i]);
         }
-
         args_context_t* ctx = init_args_context();
         argparse_add_parameter(ctx, "help", 'h', "Show help message", 0, 0, 0, show_help_for_add);
         argparse_set_error_handle(ctx, cb_error_report);
@@ -81,57 +80,46 @@ void cb_process_add(int parac, const char** parav) {
     argparse_set_positional_arg_process(ctx, cb_process_positional);
     argparse_set_directive_positional_arg_process(ctx, cb_process_direcive_positional);
     if (!parse_args(ctx, parac, parav)) {
-        printf("usage: test build [--help]\n");
+        argparse_print_usage(ctx, "test build");
         printf("type `%s build --help` for more information\n", parav[0]);
         deinit_args_context(ctx);
         exit(1);
     }
     deinit_args_context(ctx);
 }
+
 void cb_process_encoding(int parac, const char** parav) {
     printf("set encoding to %s (-E)\n", parav[0]);
 }
+
 void show_help(int parac, const char** parav) {
-    printf(R"help(usage: test [OPTIONS...] FILES...
-
-Positional:
-   FILES                List of files to open
-
-Options:
-   -r, --read           Read
-   -w, --write          Write
-   -b, --binary         Binary
-   -s, --save [FILE...] Save, or save to another file(s)
-   -h, --help           Show help message
-   -v, --verbose        Use this flag to set verbose level, use different times
-                        to set different verbose levels
-       --version        Show version info
-   -E ENCODING          Set file encoding
-)help");
+    argparse_print_help_usage(ctx, "test", NULL, NULL);
     exit(0);
 }
 
-
-
-
 void argument_parse(int argc, const char** argv) {
-    args_context_t* ctx = init_args_context();
+    ctx = init_args_context();
     argparse_add_parameter(ctx, "read", 'r', "Read", 0, 0, 0, cb_process_read);
     argparse_add_parameter(ctx, "write", 'w', "Write", 0, 0, 0, cb_process_write);
     argparse_add_parameter(ctx, "binary", 'b', "Binary", 0, 0, 0, cb_process_binary);
     argparse_add_parameter(ctx, "save", 's', "ave, or save to another file(s)", 0, 100, 0, cb_process_save);
+    argparse_set_parameter_name(ctx, "FILES...");
     argparse_add_parameter(ctx, "help", 'h', "Show help message", 0, 0, 0, show_help);
     argparse_add_parameter(ctx, "verbose", 'v', "Use this flag to set verbose level", 0, 0, 0, cb_process_verbose);
     argparse_add_parameter(ctx, "version", 0, "Version", 0, 0, 0, cb_process_version);
     argparse_add_parameter(ctx, NULL, 'E', "Set encoding", 1, 1, 0, cb_process_encoding);
+    argparse_set_parameter_name(ctx, "ENCODING");
     argparse_add_parameter_directive(ctx, "add", 'a', "Add", 0, cb_process_add);
+    argparse_set_parameter_name(ctx, "NAME");
     argparse_set_error_handle(ctx, cb_error_report);
     argparse_set_positional_arg_process(ctx, cb_process_positional);
     argparse_set_directive_positional_arg_process(ctx, cb_process_direcive_positional);
     argparse_set_positional_args(ctx, 1, 100);
     argparse_enable_remove_ambiguous(ctx);
+    argparse_sort_parameters(ctx);
+    argparse_set_positional_arg_name(ctx, "FILE", "File to open");
     if (!parse_args(ctx, argc, argv)) {
-        printf("usage: test [OPTIONS...] FILES...\n");
+        argparse_print_usage(ctx, "test");
         printf("type `%s --help` for more information\n", argv[0]);
         deinit_args_context(ctx);
         exit(1);
@@ -140,8 +128,7 @@ void argument_parse(int argc, const char** argv) {
 }
 
 int main(int argc, const char** argv) {
-    __acane__argparse_unit_test();
-    return 0;
+//    __acane__argparse_unit_test();
     argument_parse(argc, argv);
     if (verbose_level != 0) {
         printf("set verbose level finally to %d\n", verbose_level);

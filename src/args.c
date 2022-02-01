@@ -37,6 +37,8 @@ typedef struct arg_info {
 
     int         required;
     int         _requirement_satisfied_sign;
+    int         _arg_name_sign;
+    const char* arg_name;
 } arg_info_t;
 
 /* graph nodes */
@@ -130,11 +132,11 @@ void valarray_element_swap(val_array_element_t* a, val_array_element_t* b) {
 }
 
 // quick sort
-int valarray_quick_partition(valarray_t* arr, int s, int e, int (*cmp)(val_array_element_t a, val_array_element_t b)) {
-    int i=s, j=s;
-    val_array_element_t* x=arr->data[s];
-    for (; j<=e; j++)
-        if (cmp(arr->data[i], arr->data[j]))
+int valarray_quick_sort_partition(valarray_t* arr, int s, int e, int (*cmp)(val_array_element_t a, val_array_element_t b)) {
+    int i=s;
+    val_array_element_t x=arr->data[s];
+    for (int j=s; j<=e; j++)
+        if (cmp(arr->data[j], x))
             valarray_element_swap(&arr->data[++i], &arr->data[j]);
     valarray_element_swap(&arr->data[i], &arr->data[s]);
     return i;
@@ -143,9 +145,9 @@ int valarray_quick_partition(valarray_t* arr, int s, int e, int (*cmp)(val_array
 void valarray_quick_sort(valarray_t* arr, int s, int e, int (*cmp)(val_array_element_t a, val_array_element_t b)) {
     if (s >= e)
         return;
-    int m = valarray_quick_partition(arr, s, e, cmp);
-    valarray_quick_partition(arr, s, m-1, cmp);
-    valarray_quick_partition(arr, m+1, e, cmp);
+    int m = valarray_quick_sort_partition(arr, s, e, cmp);
+    valarray_quick_sort(arr, s, m-1, cmp);
+    valarray_quick_sort(arr, m+1, e, cmp);
 }
 
 void valarray_sort(valarray_t* arr, int (*cmp)(val_array_element_t a, val_array_element_t b)) {
@@ -245,6 +247,8 @@ struct args_context {
 
     // all arguments
     valarray_t* args;
+    valarray_t* positional_args;
+    valarray_t* positional_args_description;
 };
 
 args_context_t* init_args_context() {
@@ -263,15 +267,31 @@ args_context_t* init_args_context() {
     ctx->help_leading_spaces = 25;
     ctx->output_file = stdout;
     valarray_init(&ctx->args);
+    valarray_init(&ctx->positional_args);
+    valarray_init(&ctx->positional_args_description);
 	return ctx;
 }
 
 void deinit_args_context(args_context_t* ctx) {
     if (!ctx) return;
+    // deinit graph
 	if (ctx->ctx_graph)
         ctx_graph_free(ctx->ctx_graph);
+    // deinit args
     if (ctx->args && ctx->args->data)
         free(ctx->args->data);
+    if (ctx->args)
+        free(ctx->args);
+    // deinit positional args
+    if (ctx->positional_args && ctx->positional_args->data)
+        free(ctx->positional_args->data);
+    if (ctx->positional_args)
+        free(ctx->positional_args);
+    if (ctx->positional_args_description && ctx->positional_args_description->data)
+        free(ctx->positional_args_description->data);
+    if (ctx->positional_args_description)
+        free(ctx->positional_args_description);
+    // free context
 	free(ctx);
 }
 
@@ -280,6 +300,14 @@ int argparse_set_positional_args(args_context_t* ctx, int minc, int maxc) {
         return FAIL;
     ctx->positional_minc = minc;
     ctx->positional_maxc = maxc;
+    return OK;
+}
+
+int argparse_set_positional_arg_name(args_context_t* ctx, const char* name, const char* description) {
+    if (!ctx)
+        return FAIL;
+    valarray_push_back(ctx->positional_args, (void*) name);
+    valarray_push_back(ctx->positional_args_description, (void*) description);
     return OK;
 }
 
@@ -316,6 +344,7 @@ int regsiter_parameter_on_graph(args_context_t* ctx, const char* param,
 	final_node->arg_info->process = process;
     final_node->arg_info->directive_flag = is_directive;
     final_node->arg_info->required = required;
+    final_node->arg_info->arg_name = NULL;
     if (arginfo)
         *arginfo = final_node->arg_info;
 	return OK;
@@ -351,6 +380,28 @@ int add_parameter_with_args_(args_context_t* ctx, const char* long_term, char sh
         valarray_push_back(ctx->args, (void *) arginfo);
         LOG("add arg_info to args [args.size=%zu]", ctx->args->size);
     }
+    return OK;
+}
+
+int argparse_add_parameter_with_args(args_context_t* ctx, const char* long_term, char short_term,
+                                     const char* description, int minc, int maxc, int required, const char* arg_name,
+                                     void (*process)(int parac, const char** parav)) {
+    if (!ctx) return FAIL;
+    static volatile int _locked = 0;
+    while (_locked);
+    _locked = 1;
+    int ret = add_parameter_with_args_(ctx, long_term, short_term, description, minc, maxc, required, process, 0);
+    if (!ret) return FAIL;
+    argparse_set_parameter_name(ctx, arg_name);
+    _locked = 0;
+    return OK;
+}
+
+int argparse_set_parameter_name(args_context_t* ctx, const char* arg_name) {
+    if (!ctx) return FAIL;
+    arg_info_t* _a = ctx->args->data[ctx->args->size-1];
+    _a->_arg_name_sign = ACANE_SIGN;
+    _a->arg_name = arg_name;
     return OK;
 }
 
@@ -651,6 +702,12 @@ int argparse_print_set_help_msg_width(args_context_t* ctx, int width) {
     return OK;
 }
 
+int argparse_print_set_help_msg_leading_spaces(args_context_t* ctx, int width) {
+    if (!ctx) return FAIL;
+    ctx->help_leading_spaces = width;
+    return OK;
+}
+
 size_t strlen_wd(const char* str) {
     int ch, nextch;
     const char* str_begin = str;
@@ -725,7 +782,7 @@ int print_help_paramater_info(args_context_t* ctx, arg_info_t* arginfo, char** _
     if (arginfo->short_term) {
         _width += sprintf(buf + _width, "-%c", arginfo->short_term);
         if (!arginfo->long_term && arginfo->min_parameter_count > 0) {
-            PRINT_HELP_PARAMETER_(NULL);
+            PRINT_HELP_PARAMETER_(arginfo->arg_name);
         }
     }
     if (arginfo->long_term) {
@@ -737,7 +794,7 @@ int print_help_paramater_info(args_context_t* ctx, arg_info_t* arginfo, char** _
         }
         _width += sprintf(buf + _width, "--%s", arginfo->long_term);
         if (arginfo->max_parameter_count > 0) {
-            PRINT_HELP_PARAMETER_(NULL);
+            PRINT_HELP_PARAMETER_(arginfo->arg_name);
         }
     }
     *_out_buf = buf;
@@ -749,7 +806,7 @@ int argparse_print_help(args_context_t* ctx) {
     assert(ctx->args);
     for (int i=0; i<ctx->args->size; i++) {
         arg_info_t* __a = (arg_info_t *) ctx->args->data[i];
-        const char* buf;
+        char* buf = NULL;
         int width = print_help_paramater_info(ctx, __a, &buf);
         fprintf(ctx->output_file, "%s", buf);
         //LOG("  short: %c   long: %s,  minc: %d, maxc: %d\n", __a->short_term, __a->long_term, __a->min_parameter_count, __a->max_parameter_count);
@@ -766,6 +823,39 @@ int argparse_print_help(args_context_t* ctx) {
         }
         fprintf(ctx->output_file, "\n");
     }
+    return OK;
+}
+
+int argparse_print_help_for_positional(args_context_t* ctx) {
+    if (!ctx) return FAIL;
+    assert(ctx->positional_args->size == ctx->positional_args_description->size);
+    for (int i=0; i<ctx->positional_args->size; i++) {
+        if (ctx->positional_args_description->data[i]) {
+            const char* name = ctx->positional_args->data[i];
+            const char* description = ctx->positional_args_description->data[i];
+            int w = fprintf(ctx->output_file, "  %s", name);
+            if (w > ctx->help_leading_spaces) {
+                w = 0;
+                fprintf(ctx->output_file, "\n");
+            }
+            for (int j=w; j<ctx->help_leading_spaces; j++)
+                fputc(' ', ctx->output_file);
+            print_line_wrap(ctx, description, ctx->help_leading_spaces);
+            fputc('\n', ctx->output_file);
+        }
+    }
+    return OK;
+}
+
+int argparse_compare_arginfo_fn(val_array_element_t a, val_array_element_t b) {
+    arg_info_t* __a = (arg_info_t*)a;
+    arg_info_t* __b = (arg_info_t*)b;
+    return strcmp(arg_info_to_string(__a), arg_info_to_string(__b)) < 0;
+}
+
+int argparse_sort_parameters(args_context_t* ctx) {
+    if (!ctx) return FAIL;
+    valarray_sort(ctx->args, argparse_compare_arginfo_fn);
     return OK;
 }
 
@@ -798,6 +888,7 @@ int argparse_print_usage(args_context_t* ctx, const char* program_name) {
 
     // print short required usage without parameter
     int print_l = 0, print_e = 1;
+    int _c = 0;
     FOREACH_ARG_START
         if (__a->required && __a->short_term && __a->max_parameter_count == 0) {
             if (!print_l) {
@@ -812,11 +903,13 @@ int argparse_print_usage(args_context_t* ctx, const char* program_name) {
                 print_l = 0;
             }
             _width += fprintf(ctx->output_file, "%s", buf);
+            _c++;
         }
     FOREACH_ARG_END
     // print short optional usage without parameter
     print_l = 0;
-    PRINT_USAGE_(" ");
+    if (_c)   PRINT_USAGE_(" ");
+    _c = 0;
     FOREACH_ARG_START
         if (!__a->required && __a->short_term && __a->max_parameter_count == 0) {
             int w = sprintf(buf, "%c", __a->short_term);
@@ -844,7 +937,7 @@ int argparse_print_usage(args_context_t* ctx, const char* program_name) {
             // with arg
             if (__a->max_parameter_count > 0) {
                 // optional parameter
-                w += help_print_addi_parameters_name_to_str(__a, NULL, buf + w);
+                w += help_print_addi_parameters_name_to_str(__a, __a->arg_name, buf + w);
                 w += sprintf(buf + w, " ");
             }
             if (w + _width > max_width) {
@@ -864,7 +957,7 @@ int argparse_print_usage(args_context_t* ctx, const char* program_name) {
             // with arg
             if (__a->max_parameter_count > 0) {
                 // optional parameter
-                w += help_print_addi_parameters_name_to_str(__a, NULL, buf + w);
+                w += help_print_addi_parameters_name_to_str(__a, __a->arg_name, buf + w);
             }
             w += sprintf(buf + w, "] ");
             if (w + _width > max_width) {
@@ -876,6 +969,65 @@ int argparse_print_usage(args_context_t* ctx, const char* program_name) {
 
         }
     FOREACH_ARG_END
+
+    /// print required positional args
+    for (int i=0; i<ctx->positional_minc; i++) {
+        int w = i < ctx->positional_args->size ?
+                sprintf(buf, "%s ",  (char*)ctx->positional_args->data[i]) :
+                sprintf(buf, "ARG%d ", i+1);
+        if (w + _width > max_width) {
+            _width = 0;
+            fprintf(ctx->output_file, "\n");
+            PRINT_USAGE_LEADING_SPACE_();
+        }
+        PRINT_USAGE_("%s", buf);
+    }
+
+    /// print optional positional args
+    for (int i=ctx->positional_minc; i<ctx->positional_maxc; i++) {
+        if (i >= ctx->positional_args->size) {
+            PRINT_USAGE_("...");
+            break;
+        }
+        int w = sprintf(buf, "[%s] ",  (char*)ctx->positional_args->data[i]);
+        if (w + _width > max_width) {
+            _width = 0;
+            fprintf(ctx->output_file, "\n");
+            PRINT_USAGE_LEADING_SPACE_();
+        }
+        PRINT_USAGE_("%s", buf);
+    }
+
+    PRINT_USAGE_("\n");
+    return OK;
+}
+
+int argparse_print_help_usage(args_context_t* ctx, const char* program_name, const char* title_for_position, const char* title_for_args) {
+    if (!ctx) return FAIL;
+    argparse_print_usage(ctx, program_name);
+    fprintf(ctx->output_file, "\n");
+
+    // try print help for positional arguments
+    int positional_count = 0;
+    for (int i=0; i<ctx->positional_args_description->size; i++)
+        if (((arg_info_t*)ctx->positional_args_description->data[i])->description)
+            positional_count++;
+    if (positional_count) {
+        fprintf(ctx->output_file, "%s:\n", title_for_position ? title_for_position : "Positional Arguments");
+        argparse_print_help_for_positional(ctx);
+        fprintf(ctx->output_file, "\n");
+    }
+
+    // print help
+    fprintf(ctx->output_file, "%s:\n", title_for_args ? title_for_args : "Arguments");
+    argparse_print_help(ctx);
+    return OK;
+}
+
+int argparse_set_print_file(args_context_t* ctx, FILE* file) {
+    if (!ctx) return FAIL;
+    ctx->output_file = file;
+    return OK;
 }
 
 // =================================================================================
@@ -912,26 +1064,36 @@ void __acane__unit_test__full_test() {
     args_context_t* ctx = init_args_context();
     argparse_add_parameter(ctx, "optional", 'O', "optional", 0, 1, 0, __acane__unit_test_cb_process);
     argparse_add_parameter(ctx, "files", 'f', "specify files", 1, 2, 0, __acane__unit_test_cb_process);
+    argparse_set_parameter_name(ctx, "FILES");
     argparse_add_parameter(ctx, "list", 'L', "list files", 0, 0, 0, __acane__unit_test_cb_process);
     argparse_add_parameter(ctx, "license", 0, "Show licenses", 0, 0, 0, __acane__unit_test_cb_process);
-    argparse_add_parameter(ctx, "required", 'R', "Required", 0, 0, 1, __acane__unit_test_cb_process);
-    argparse_add_parameter(ctx, "required2", 'r', "Required", 0, 0, 1, __acane__unit_test_cb_process);
-    argparse_add_parameter(ctx, "required3", 0, "Required", 0, 0, 1, __acane__unit_test_cb_process);
-    argparse_add_parameter(ctx, "required4", 0, "Required", 0, 0, 1, __acane__unit_test_cb_process);
-    argparse_add_parameter(ctx, "required5", 0, "Required", 0, 1, 1, __acane__unit_test_cb_process);
-    argparse_add_parameter(ctx, "required6", 0, "Required", 1, 1, 1, __acane__unit_test_cb_process);
-    argparse_add_parameter(ctx, "optional1", 0, "Required", 0, 0, 0, __acane__unit_test_cb_process);
-    argparse_add_parameter(ctx, "optional2", 0, "Required", 0, 0, 0, __acane__unit_test_cb_process);
-    argparse_add_parameter(ctx, "optional5", 0, "Required", 1, 1, 0, __acane__unit_test_cb_process);
-    argparse_add_parameter(ctx, "optional3", 0, "Required", 0, 1, 0, __acane__unit_test_cb_process);
+    argparse_add_parameter(ctx, "grequired", 'R', "Required", 0, 0, 1, __acane__unit_test_cb_process);
+    argparse_add_parameter(ctx, "brequired", 'r', "Required", 0, 0, 1, __acane__unit_test_cb_process);
+    argparse_add_parameter(ctx, "yrequired", 0, "Required", 0, 0, 1, __acane__unit_test_cb_process);
+    argparse_add_parameter(ctx, "krequired", 0, "Required", 0, 0, 1, __acane__unit_test_cb_process);
+    argparse_add_parameter(ctx, "erequired", 0, "Required", 0, 1, 1, __acane__unit_test_cb_process);
+    argparse_add_parameter(ctx, "bind", 0, "Required", 1, 1, 0, __acane__unit_test_cb_process);
+    argparse_set_parameter_name(ctx, "[ADDRESS]:PORT");
+    argparse_add_parameter(ctx, "goptional", 0, "Required", 0, 0, 0, __acane__unit_test_cb_process);
+    argparse_add_parameter(ctx, "soptional", 0, "Required", 0, 0, 0, __acane__unit_test_cb_process);
+    argparse_add_parameter(ctx, "loptional", 0, "Required", 1, 1, 0, __acane__unit_test_cb_process);
+    argparse_add_parameter(ctx, "aoptional", 0, "Required", 0, 1, 0, __acane__unit_test_cb_process);
     argparse_add_parameter(ctx, "help", 'h', "Show help info", 0, 0, 0, __acane__unit_test_cb_process);
-    argparse_add_parameter(ctx, NULL, 'l', "lll", 0, 0, 0, __acane__unit_test_cb_process);
-    argparse_add_parameter(ctx, NULL, 'o', "lll", 0, 0, 0, __acane__unit_test_cb_process);
+    argparse_add_parameter(ctx, NULL, 'x', "lll", 0, 0, 0, __acane__unit_test_cb_process);
+    argparse_add_parameter(ctx, NULL, 'm', "lll", 0, 0, 0, __acane__unit_test_cb_process);
     argparse_set_error_handle(ctx, __acane__unit_test_cb_error_report);
     argparse_set_positional_arg_process(ctx, __acane_unit_test_cb_process_positional);
-    argparse_set_positional_args(ctx, 0, 3);
-    argparse_print_help(ctx);
-    argparse_print_usage(ctx, "test");
+    argparse_set_positional_args(ctx, 3, 6);
+    argparse_set_positional_arg_name(ctx, "NAME", "Name of your name");
+    argparse_set_positional_arg_name(ctx, "AGE", "Age of you");
+    argparse_set_positional_arg_name(ctx, "SEX", "Sex of you, can be one of male and female");
+    argparse_set_positional_arg_name(ctx, "FILES", "Specify files you want to transfer to me, Specify files you want to transfer to me, Specify files you want to transfer to me");
+    argparse_sort_parameters(ctx);
+    argparse_print_set_help_msg_leading_spaces(ctx, 30);
+    //argparse_print_usage(ctx, "test");
+    //argparse_print_help_for_positional(ctx);
+    //argparse_print_help(ctx);
+    argparse_print_help_usage(ctx, "test", NULL, NULL);
     //parse_args(ctx, argc, argv);
     deinit_args_context(ctx);
 }

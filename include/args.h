@@ -1,6 +1,8 @@
 #ifndef _ACANE_ARGS_C_
 #define _ACANE_ARGS_C_
 
+#include <stdio.h>
+
 struct args_context;
 typedef struct args_context args_context_t;
 
@@ -24,6 +26,14 @@ args_context_t* init_args_context();
 /// \return OK or FAIL
 int argparse_set_positional_args(args_context_t* ctx, int minc, int maxc);
 
+/// Set name of positional names (one by one)
+/// First call sets the first positional arg, second call sets the second one, so does more.
+/// \param ctx    pointer to context
+/// \param name   name of positional args
+/// \param description  description of this arguement, if no description, pass NULL instead
+/// \return
+int argparse_set_positional_arg_name(args_context_t* ctx, const char* name, const char* description);
+
 /// De-initialize context
 /// \param ctx  pointer to context
 void deinit_args_context(args_context_t* ctx);
@@ -42,25 +52,32 @@ int argparse_add_parameter(args_context_t* ctx, const char* long_term, char shor
                    const char* description, int minc, int maxc, int required,
                    void (*process)(int parac, const char** parav));
 
-/// Add parameter meta information
+/// Add parameter meta information (thread safe)
 /// \param ctx         pointer to context
 /// \param long_term   long term of the argument (e.g., --flag)
 /// \param short_term  short term of the argument (e.g., -f)
 /// \param description description
 /// \param minc        min argument count
 /// \param maxc        min argument count
-/// \param required     if the parameter is quired
+/// \param required    if the parameter is quired
+/// \param arg_name    name of argument
 /// \param process     callback to process function
 /// \return OK or FAIL
 int argparse_add_parameter_with_args(args_context_t* ctx, const char* long_term, char short_term,
-                   const char* description, int minc, int maxc, int required,
+                   const char* description, int minc, int maxc, int required, const char* arg_name,
                    void (*process)(int parac, const char** parav));
+
+/// Set arg name for last added parameter (need to ensure thread safe by user)
+/// \param ctx       pointer to context
+/// \param arg_name  name of argument
+/// \return
+int argparse_set_parameter_name(args_context_t* ctx, const char* arg_name);
 
 /// Add parameter meta information (with only long term, without parameter)
 /// \param ctx         pointer to context
 /// \param long_term   long term of the argument (e.g., --flag)
 /// \param description description
-/// \param required     if the parameter is quired
+/// \param required    if the parameter is required
 /// \param process     callback to process function
 /// \return OK or FAIL
 int argparse_add_parameter_long_term(args_context_t* ctx, const char* long_term,
@@ -73,7 +90,7 @@ int argparse_add_parameter_long_term(args_context_t* ctx, const char* long_term,
 /// \param description description
 /// \param minc        min argument count
 /// \param maxc        min argument count
-/// \param required     if the parameter is quired
+/// \param required    if the parameter is required
 /// \param process     callback to process function
 /// \return OK or FAIL
 int argparse_add_parameter_long_term_with_args(args_context_t* ctx, const char* long_term,
@@ -84,7 +101,7 @@ int argparse_add_parameter_long_term_with_args(args_context_t* ctx, const char* 
 /// \param ctx         pointer to context
 /// \param short_term  short term of the argument (e.g., -f)
 /// \param description description
-/// \param required     if the parameter is quired
+/// \param required    if the parameter is required
 /// \param process     callback to process function
 /// \return OK or FAIL
 int argparse_add_parameter_short_term(args_context_t* ctx, char short_term,
@@ -97,7 +114,7 @@ int argparse_add_parameter_short_term(args_context_t* ctx, char short_term,
 /// \param description description
 /// \param minc        min argument count
 /// \param maxc        min argument count
-/// \param required     if the parameter is quired
+/// \param required    if the parameter is required
 /// \param process     callback to process function (parac: count of args, parav: args for the flags)
 /// \return OK or FAIL
 int argparse_add_parameter_short_term_with_args(args_context_t* ctx, char short_term,
@@ -109,7 +126,7 @@ int argparse_add_parameter_short_term_with_args(args_context_t* ctx, char short_
 /// \param long_term    long term of the argument (e.g., --flag)
 /// \param short_term   short term of the argument (e.g., -f)
 /// \param description  description
-/// \param required     if the parameter is quired
+/// \param required     if the parameter is required
 /// \param process      callback to process function (this function returns 1 if is processed by directive)
 /// \return OK or FAIL
 int argparse_add_parameter_directive(args_context_t* ctx, const char* long_term, char short_term,
@@ -145,17 +162,57 @@ int argparse_set_directive_positional_arg_process(args_context_t* ctx, int (*pro
 int parse_args(args_context_t* ctx, int argc, const char** argv);
 
 /// Set help message display width
+///
+///                           |<---          width       --->|
+/// -h, --help                Show help message
 /// \param ctx   pointer to context
 /// \param width width of help message
 /// \return OK or FAIL
 int argparse_print_set_help_msg_width(args_context_t* ctx, int width);
+
+/// Set leading spaces for help message items
+///
+/// |<--- leading spaces --->|
+/// -h, --help                Show help message
+/// \param ctx   pointer to context
+/// \param width leading spaces of help message item
+/// \return
+int argparse_print_set_help_msg_leading_spaces(args_context_t* ctx, int width);
+
+/// Sort parameters
+/// \param ctx   pointer to context
+/// \return OK or FAIL
+int argparse_sort_parameters(args_context_t* ctx);
 
 /// Print help message for registered parameters
 /// \param ctx   pointer to context
 /// \return OK or FAIL
 int argparse_print_help(args_context_t* ctx);
 
+/// Print help message for registered positional parameters
+/// \param ctx   pointer to context
+/// \return OK or FAIL
+int argparse_print_help_for_positional(args_context_t* ctx);
+
+/// Print usage message for registered parameters
+/// \param ctx           pointer to context
+/// \param program_name  program name shown after 'usage:'
+/// \return
 int argparse_print_usage(args_context_t* ctx, const char* program_name);
+
+/// Print help and usage message for registered parameters
+/// \param ctx           pointer to context
+/// \param program_name  program name shown after 'usage:'
+/// \param title_for_position title for positional args section, pass NULL to use default value (i.e., Positional Arguments)
+/// \param title_for_args title for args section, pass NULL to use default value (i.e., Arguments)
+/// \return
+int argparse_print_help_usage(args_context_t* ctx, const char* program_name, const char* title_for_position, const char* title_for_args) ;
+
+/// Set file to output help and usage
+/// \param ctx   pointer to context
+/// \param file  pointer to FILE object (e.g., stdout, stderr)
+/// \return
+int argparse_set_print_file(args_context_t* ctx, FILE* file);
 
 /// Unit test
 /// \return OK or FAIL
