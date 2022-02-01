@@ -132,6 +132,7 @@ ctx_node_t* ctx_node_init(int ch) {
 		free(__n);
 		return NULL;
 	}
+    __n->arg_info = NULL;
 	return __n;
 }
 
@@ -387,6 +388,10 @@ arg_info_t* get_parameter_from_graph(args_context_t* ctx, const char* arg) {
             // no such parameter
             return NULL;
         }
+    }
+    // If this flag can become an end
+    if (node->arg_info) {
+        return node->arg_info;
     }
     // returns the final node
     // if the node is not final node
@@ -740,7 +745,7 @@ void __acane__unit_test__full_test() {
             "-O", "__acane__argparse_unit_test", "-Ohhhh",
             "--files", "file1", "file2", "file3",
             "--license", "-h", "--fil", "file3", "file4", "file3", "file4",
-            "--requi"
+            "--requi", "-l"
             //"--li",
     };
     int argc = sizeof(argv) / sizeof(const char*) - 1;
@@ -788,7 +793,7 @@ void __acane__test_print_wrap() {
 
 void __acane__test_print() {
     args_context_t * ctx = init_args_context();
-    argparse_add_parameter(ctx, "files", 0, "This is a test. This is a test. This is a test. This is a test. This is a test.", 1, 2, 0, __acane__unit_test_cb_process);
+    argparse_add_parameter(ctx, "files", 0, "This is a test. This is a test. This is a test. This is a test. This is a test.", 1, 2, 1, __acane__unit_test_cb_process);
     argparse_add_parameter(ctx, "readable_items", 'R', "Load a readable item.", 1, 2, 0, __acane__unit_test_cb_process);
     argparse_add_parameter(ctx, "name", 'n', "This is a test. This is a test. This is a test. This is a test. This is a test.", 0, 1, 0, __acane__unit_test_cb_process);
     argparse_add_parameter(ctx, NULL, 'h', "This is a test. This is a test. This is a test. This is a test. This is a test.", 0, 0, 0, __acane__unit_test_cb_process);
