@@ -124,7 +124,6 @@ void argument_parse(int argc, const char** argv) {
         deinit_args_context(ctx);
         exit(1);
     }
-    deinit_args_context(ctx);
 }
 
 int main(int argc, const char** argv) {
@@ -133,4 +132,5 @@ int main(int argc, const char** argv) {
     if (verbose_level != 0) {
         printf("set verbose level finally to %d\n", verbose_level);
     }
+    deinit_args_context(ctx);
 }

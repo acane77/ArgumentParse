@@ -27,13 +27,13 @@ typedef struct valarray valarray_t;
 
 /* Arguments info */
 typedef struct arg_info {
-	const char* long_term;
-	const char* description;
-	int         short_term;
-	int         min_parameter_count;
-	int         max_parameter_count;
+    const char* long_term;
+    const char* description;
+    int         short_term;
+    int         min_parameter_count;
+    int         max_parameter_count;
     int         directive_flag;   // treat all flags after into parameter of this flag
-	void        (*process)(int parac, const char** parav); // no free parav!
+    void        (*process)(int parac, const char** parav); // no free parav!
 
     int         required;
     int         _requirement_satisfied_sign;
@@ -43,15 +43,15 @@ typedef struct arg_info {
 
 /* graph nodes */
 typedef struct arg_ctx_node {
-	char        ch;     
-	valarray_t* children;
-	arg_info_t* arg_info;
-	int         _arg_sign;
+    char        ch;
+    valarray_t* children;
+    arg_info_t* arg_info;
+    int         _arg_sign;
 } ctx_node_t;
 
 /* args graph-based metadata */
 typedef struct arg_ctx_graph {
-	ctx_node_t* head;
+    ctx_node_t* head;
 } ctx_graph_t;
 
 typedef void* val_array_element_t;
@@ -59,69 +59,69 @@ typedef void* val_array_element_t;
 
 /* Variable length array for nodes */
 struct valarray {
-	val_array_element_t* data;
-	size_t   capacity;
-	size_t   size;
+    val_array_element_t* data;
+    size_t   capacity;
+    size_t   size;
 };
 
 int valarray_extend_capacity(valarray_t* arr) {
-	assert(arr && "arr is not initialized");
-	val_array_element_t* _old = arr->data;
+    assert(arr && "arr is not initialized");
+    val_array_element_t* _old = arr->data;
     val_array_element_t* _new = (val_array_element_t*)realloc((void*)_old, sizeof(val_array_element_t) * (arr->capacity + VALARRAY_CAPACITY_PER_INCREASE));
-	if (!_new) {
-		LOGE("allocate memory for capacity %lu failed", arr->capacity + 10);
-		return FAIL;
-	}
-	arr->capacity += VALARRAY_CAPACITY_PER_INCREASE;
-	arr->data = _new;
-	return OK;
+    if (!_new) {
+        LOGE("allocate memory for capacity %lu failed", arr->capacity + 10);
+        return FAIL;
+    }
+    arr->capacity += VALARRAY_CAPACITY_PER_INCREASE;
+    arr->data = _new;
+    return OK;
 }
 
 int valarray_init(valarray_t** arr) {
-	*arr = (valarray_t*)malloc(sizeof(valarray_t));
-	if (!*arr) {
-		LOGE("allocate memory failed");
-		return FAIL;
-	}
-	(*arr)->capacity = 0;
-	(*arr)->size = 0;
-	(*arr)->data = NULL;
-	return valarray_extend_capacity(*arr);
+    *arr = (valarray_t*)malloc(sizeof(valarray_t));
+    if (!*arr) {
+        LOGE("allocate memory failed");
+        return FAIL;
+    }
+    (*arr)->capacity = 0;
+    (*arr)->size = 0;
+    (*arr)->data = NULL;
+    return valarray_extend_capacity(*arr);
 }
 
 int valarray_push_back(valarray_t* arr, val_array_element_t el) {
-	if (arr->size + 1 > arr->capacity) {
-		int ret = valarray_extend_capacity(arr);
-		if (ret != OK) {
-			return ret;
-		}
-	}
-	arr->data[arr->size++] = el;
-	return OK;
+    if (arr->size + 1 > arr->capacity) {
+        int ret = valarray_extend_capacity(arr);
+        if (ret != OK) {
+            return ret;
+        }
+    }
+    arr->data[arr->size++] = el;
+    return OK;
 }
 
 val_array_element_t* valarray_get(valarray_t* arr, size_t __i) {
-	assert(arr && "arr is not initialized");
-	assert(arr->data && "arr->data is not initialized");
-	if (arr->size <= __i) {
-		LOGE("index out of range, with [size=%zu, i=%zu]", arr->size, __i);
-		return NULL;
-	}
-	return &arr->data[__i];
+    assert(arr && "arr is not initialized");
+    assert(arr->data && "arr->data is not initialized");
+    if (arr->size <= __i) {
+        LOGE("index out of range, with [size=%zu, i=%zu]", arr->size, __i);
+        return NULL;
+    }
+    return &arr->data[__i];
 }
 
 size_t valarray_index_of(valarray_t* arr, val_array_element_t* x, int (*cmp)(val_array_element_t* __lhs, val_array_element_t* __rhs)) {
-	for (int i = 0; i < arr->size; ++i)
-		if (!cmp(&arr->data[i], x))
-			return i;
-	return -1;
+    for (int i = 0; i < arr->size; ++i)
+        if (!cmp(&arr->data[i], x))
+            return i;
+    return -1;
 }
 
 size_t valarray_el_index_of(valarray_t* arr, int ch) {
-	for (int i = 0; i < arr->size; ++i)
-		if (((ctx_node_t*)(arr->data[i]))->ch == ch)
-			return i;
-	return -1;
+    for (int i = 0; i < arr->size; ++i)
+        if (((ctx_node_t*)(arr->data[i]))->ch == ch)
+            return i;
+    return -1;
 }
 /////
 
@@ -165,46 +165,46 @@ void valarray_foreach(valarray_t* arr, void (*fn)(val_array_element_t* el)) {
 // ==============================================================================
 
 ctx_node_t* ctx_node_init(int ch) {
-	LOG("construct node with [ch=%c (%d)]", ch, ch);
-	ctx_node_t* __n = (ctx_node_t*)malloc(sizeof(ctx_node_t));
-	if (!__n)
-		return NULL;
-	__n->ch = ch;
-	int __r = valarray_init(&__n->children);
-	if (__r != OK) {
-		LOG("init children list failed");
-		free(__n);
-		return NULL;
-	}
+    LOG("construct node with [ch=%c (%d)]", ch, ch);
+    ctx_node_t* __n = (ctx_node_t*)malloc(sizeof(ctx_node_t));
+    if (!__n)
+        return NULL;
+    __n->ch = ch;
+    int __r = valarray_init(&__n->children);
+    if (__r != OK) {
+        LOG("init children list failed");
+        free(__n);
+        return NULL;
+    }
     __n->arg_info = NULL;
-	return __n;
+    return __n;
 }
 
 ctx_node_t* ctx_graph_add_nodes(ctx_graph_t* __g, const char* str) {
-	ctx_node_t* node = __g->head;
-	for (; *str; ++str) {
-		int index = valarray_el_index_of(node->children, *str);
-		if (index >= 0) {
-			assert(index < node->children->size);
-			node = *valarray_get(node->children, index);
-		}
-		else {
-			ctx_node_t* new_node = ctx_node_init(*str);
-			valarray_push_back(node->children, new_node);
-			node = new_node;
-		}
-	}
-	// returns the final node
-	return node;
+    ctx_node_t* node = __g->head;
+    for (; *str; ++str) {
+        int index = valarray_el_index_of(node->children, *str);
+        if (index >= 0) {
+            assert(index < node->children->size);
+            node = *valarray_get(node->children, index);
+        }
+        else {
+            ctx_node_t* new_node = ctx_node_init(*str);
+            valarray_push_back(node->children, new_node);
+            node = new_node;
+        }
+    }
+    // returns the final node
+    return node;
 }
 
 ctx_graph_t* ctx_graph_init() {
-	ctx_graph_t* __g = (ctx_graph_t*)malloc(sizeof(ctx_graph_t));
-	if (!__g) {
-		return NULL;
-	}
-	__g->head = ctx_node_init(0);
-	return __g;
+    ctx_graph_t* __g = (ctx_graph_t*)malloc(sizeof(ctx_graph_t));
+    if (!__g) {
+        return NULL;
+    }
+    __g->head = ctx_node_init(0);
+    return __g;
 }
 
 void ctx_graph_node_free(ctx_node_t* __n) {
@@ -228,10 +228,10 @@ void ctx_graph_free(ctx_graph_t* __g) {
 #define _DEFAULT_HELP_LINE_WIDTH  (50)
 
 struct args_context {
-	ctx_graph_t* ctx_graph;
-	int (*error_handle)(const char* __msg);
-	int current_addi_arg_count;
-	arg_info_t* current_arg;
+    ctx_graph_t* ctx_graph;
+    int (*error_handle)(const char* __msg);
+    int current_addi_arg_count;
+    arg_info_t* current_arg;
     int remove_ambiguous;
 
     // process positional args
@@ -252,11 +252,11 @@ struct args_context {
 };
 
 args_context_t* init_args_context() {
-	args_context_t* ctx = (args_context_t*)malloc(sizeof(args_context_t));
-	if (!ctx) return NULL;
-	ctx->ctx_graph = ctx_graph_init();
-	ctx->current_addi_arg_count = 0;
-	ctx->current_arg = NULL;
+    args_context_t* ctx = (args_context_t*)malloc(sizeof(args_context_t));
+    if (!ctx) return NULL;
+    ctx->ctx_graph = ctx_graph_init();
+    ctx->current_addi_arg_count = 0;
+    ctx->current_arg = NULL;
     ctx->error_handle = NULL;
     ctx->process_positional = NULL;
     ctx->process_directive_positional = NULL;
@@ -269,13 +269,13 @@ args_context_t* init_args_context() {
     valarray_init(&ctx->args);
     valarray_init(&ctx->positional_args);
     valarray_init(&ctx->positional_args_description);
-	return ctx;
+    return ctx;
 }
 
 void deinit_args_context(args_context_t* ctx) {
     if (!ctx) return;
     // deinit graph
-	if (ctx->ctx_graph)
+    if (ctx->ctx_graph)
         ctx_graph_free(ctx->ctx_graph);
     // deinit args
     if (ctx->args && ctx->args->data)
@@ -292,7 +292,7 @@ void deinit_args_context(args_context_t* ctx) {
     if (ctx->positional_args_description)
         free(ctx->positional_args_description);
     // free context
-	free(ctx);
+    free(ctx);
 }
 
 int argparse_set_positional_args(args_context_t* ctx, int minc, int maxc) {
@@ -312,42 +312,42 @@ int argparse_set_positional_arg_name(args_context_t* ctx, const char* name, cons
 }
 
 int regsiter_parameter_on_graph(args_context_t* ctx, const char* param,
-		const char* description, int minc, int maxc, int required,
-		void (*process)(int parac, const char** parav), int is_long_term, int is_directive,
+        const char* description, int minc, int maxc, int required,
+        void (*process)(int parac, const char** parav), int is_long_term, int is_directive,
         arg_info_t** arginfo) {
-	ctx_node_t* final_node = ctx_graph_add_nodes(ctx->ctx_graph, param);
-	if (!final_node) {
-		LOGE("add node for --%s failed", param);
-		return FAIL;
-	}
-	if (final_node->_arg_sign == ACANE_SIGN) {
-		LOGE("parameter %s  already registered", param);
-		return FAIL;
-	}
-	final_node->_arg_sign = ACANE_SIGN;
+    ctx_node_t* final_node = ctx_graph_add_nodes(ctx->ctx_graph, param);
+    if (!final_node) {
+        LOGE("add node for --%s failed", param);
+        return FAIL;
+    }
+    if (final_node->_arg_sign == ACANE_SIGN) {
+        LOGE("parameter %s  already registered", param);
+        return FAIL;
+    }
+    final_node->_arg_sign = ACANE_SIGN;
     if (arginfo && *arginfo)
         // already as a corresponding arg_info
         final_node->arg_info = *arginfo;
     else
         final_node->arg_info = (arg_info_t*) malloc(sizeof(arg_info_t));
-	if (is_long_term)
-		final_node->arg_info->long_term = param;
-	else
-		final_node->arg_info->short_term = param[0];
+    if (is_long_term)
+        final_node->arg_info->long_term = param;
+    else
+        final_node->arg_info->short_term = param[0];
     if (arginfo && *arginfo) {
         LOG("arginfo already registered, skip");
         return OK;
     }
     final_node->arg_info->description = description;
-	final_node->arg_info->max_parameter_count = maxc;
-	final_node->arg_info->min_parameter_count = minc;
-	final_node->arg_info->process = process;
+    final_node->arg_info->max_parameter_count = maxc;
+    final_node->arg_info->min_parameter_count = minc;
+    final_node->arg_info->process = process;
     final_node->arg_info->directive_flag = is_directive;
     final_node->arg_info->required = required;
     final_node->arg_info->arg_name = NULL;
     if (arginfo)
         *arginfo = final_node->arg_info;
-	return OK;
+    return OK;
 }
 
 int add_parameter_with_args_(args_context_t* ctx, const char* long_term, char short_term,
@@ -406,9 +406,9 @@ int argparse_set_parameter_name(args_context_t* ctx, const char* arg_name) {
 }
 
 int add_parameter_with_args(args_context_t* ctx, const char* long_term, char short_term,
-				  const char* description, int minc, int maxc, int required,
-				  void (*process)(int parac, const char** parav)) {
-	return add_parameter_with_args_(ctx, long_term, short_term, description, minc, maxc, required, process, 0);
+                  const char* description, int minc, int maxc, int required,
+                  void (*process)(int parac, const char** parav)) {
+    return add_parameter_with_args_(ctx, long_term, short_term, description, minc, maxc, required, process, 0);
 }
 
 int argparse_add_parameter_directive(args_context_t* ctx, const char* long_term, char short_term,
@@ -418,43 +418,43 @@ int argparse_add_parameter_directive(args_context_t* ctx, const char* long_term,
 }
 
 int argparse_add_parameter(args_context_t* ctx, const char* long_term, char short_term,
-	const char* description, int minc, int maxc, int required,
-	void (*process)(int parac, const char** parav)) {
-	return add_parameter_with_args(ctx, long_term, short_term,
-		description, minc, maxc, required, process);
+    const char* description, int minc, int maxc, int required,
+    void (*process)(int parac, const char** parav)) {
+    return add_parameter_with_args(ctx, long_term, short_term,
+        description, minc, maxc, required, process);
 }
 
 int argparse_add_parameter_long_term(args_context_t* ctx, const char* long_term,
-	const char* description, int required,
-	void (*process)(int parac, const char** parav)) {
-	return add_parameter_with_args(ctx, long_term, PARAMETER_NO_SHORT_TERM,
-		description, PARAMETER_NO_ARGS, PARAMETER_NO_ARGS, required, process);
+    const char* description, int required,
+    void (*process)(int parac, const char** parav)) {
+    return add_parameter_with_args(ctx, long_term, PARAMETER_NO_SHORT_TERM,
+        description, PARAMETER_NO_ARGS, PARAMETER_NO_ARGS, required, process);
 }
 
 int argparse_add_parameter_long_term_with_args(args_context_t* ctx, const char* long_term,
-	const char* description, int minc, int maxc, int required,
-	void (*process)(int parac, const char** parav)) {
-	return add_parameter_with_args(ctx, long_term, PARAMETER_NO_SHORT_TERM,
-		description, minc, maxc, required, process);
+    const char* description, int minc, int maxc, int required,
+    void (*process)(int parac, const char** parav)) {
+    return add_parameter_with_args(ctx, long_term, PARAMETER_NO_SHORT_TERM,
+        description, minc, maxc, required, process);
 }
 
 int argparse_add_parameter_short_term(args_context_t* ctx, char short_term,
-	const char* description, int required,
-	void (*process)(int parac, const char** parav)) {
-	return add_parameter_with_args(ctx, PARAMETER_NO_LONG_TERM, short_term,
-		description, PARAMETER_NO_ARGS, PARAMETER_NO_ARGS, required, process);
+    const char* description, int required,
+    void (*process)(int parac, const char** parav)) {
+    return add_parameter_with_args(ctx, PARAMETER_NO_LONG_TERM, short_term,
+        description, PARAMETER_NO_ARGS, PARAMETER_NO_ARGS, required, process);
 }
 
 int argparse_add_parameter_short_term_with_args(args_context_t* ctx, char short_term,
-	const char* description, int minc, int maxc, int required,
-	void (*process)(int parac, const char** parav)) {
-	return add_parameter_with_args(ctx, PARAMETER_NO_LONG_TERM, short_term,
-		description, minc, maxc, required, process);
+    const char* description, int minc, int maxc, int required,
+    void (*process)(int parac, const char** parav)) {
+    return add_parameter_with_args(ctx, PARAMETER_NO_LONG_TERM, short_term,
+        description, minc, maxc, required, process);
 }
 
 int argparse_set_error_handle(args_context_t* ctx, int (*hnd)(const char* __msg)) {
-	if (!ctx) return FAIL;
-	ctx->error_handle = hnd;
+    if (!ctx) return FAIL;
+    ctx->error_handle = hnd;
     return OK;
 }
 
@@ -573,12 +573,12 @@ int parse_args(args_context_t* ctx, int argc, const char** argv) {
     int __global_positonal_argc = 0;
     if (argc <= 1)
         goto final_check;
-	for (int i = 1; i <= argc; i++) {
-		const char* arg = argv[i];
+    for (int i = 1; i <= argc; i++) {
+        const char* arg = argv[i];
         if (!arg) continue;
         LOG("--> %s", arg);
-		// if is flag
-		if (arg[0] == '-') {
+        // if is flag
+        if (arg[0] == '-') {
             LOG("   * is a flag (- or --)");
 
             // try process optional with no args
@@ -592,10 +592,10 @@ int parse_args(args_context_t* ctx, int argc, const char** argv) {
             // record current index
             __last_arg_idx = i;
 
-			// if is --flag flag
-			if (arg[1] == '-') {
+            // if is --flag flag
+            if (arg[1] == '-') {
                 CHECK_ADDITIONAL_ARGS();
-			    const char* long_term = arg + 2; // ignore --
+                const char* long_term = arg + 2; // ignore --
                 // the flag is -- and enable remove_ambiguous
                 if (!*long_term && ctx->remove_ambiguous) {
                     ctx->current_arg = NULL;
@@ -609,9 +609,9 @@ int parse_args(args_context_t* ctx, int argc, const char** argv) {
                 }
                 LOG("process --%s", long_term);
                 GET_PARAMETER_FROM_GRAPH_AND_CHECK(long_term);
-			}
-			// if is -f flag
-			else {
+            }
+            // if is -f flag
+            else {
                 // process combined multiply parameters: -abcd
                 while (*(++arg)) {
                     // check addtional args for every parameter
@@ -622,9 +622,9 @@ int parse_args(args_context_t* ctx, int argc, const char** argv) {
                     GET_PARAMETER_FROM_GRAPH_AND_CHECK(__s);
 
                 }
-			}
+            }
 
-		}
+        }
         // if is parameters
         else {
             LOG("   * is a pos arg");
@@ -662,7 +662,7 @@ int parse_args(args_context_t* ctx, int argc, const char** argv) {
                 }
             }
         }
-	}
+    }
 final_check:
     if (ctx->current_arg && ctx->current_arg->min_parameter_count > 0) {
         CHECK_ADDITIONAL_ARGS();
@@ -1099,20 +1099,20 @@ void __acane__unit_test__full_test() {
 }
 
 void __acane__test_args() {
-	args_context_t* ctx = init_args_context();
+    args_context_t* ctx = init_args_context();
     argparse_add_parameter(ctx, "list", 'L', "list files", 0, 0, 0, NULL);
     argparse_add_parameter(ctx, "license", 0, "Show licenses", 0, 0, 0, NULL);
     argparse_add_parameter(ctx, "help", 'h', "Show help info", 0, 0, 0, NULL);
     argparse_add_parameter(ctx, NULL, 'l', "lll", 0, 0, 0, NULL);
-	deinit_args_context(ctx);
+    deinit_args_context(ctx);
 }
 
 void __acane__test_graph() {
-	ctx_graph_t* graph = ctx_graph_init();
-	//ctx_graph_add_nodes(graph, "help");
-	ctx_graph_add_nodes(graph, "list");
-	ctx_graph_add_nodes(graph, "licence");
-	ctx_graph_add_nodes(graph, "license");
+    ctx_graph_t* graph = ctx_graph_init();
+    //ctx_graph_add_nodes(graph, "help");
+    ctx_graph_add_nodes(graph, "list");
+    ctx_graph_add_nodes(graph, "licence");
+    ctx_graph_add_nodes(graph, "license");
 }
 
 void __acane__test_print_wrap() {
