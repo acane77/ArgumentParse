@@ -137,6 +137,10 @@ int argparse_set_directive_positional_arg_process(args_context_t* ctx, int (*pro
 /// \return OK or FAIL
 int parse_args(args_context_t* ctx, int argc, const char** argv);
 
+int argparse_print_set_help_msg_width(args_context_t* ctx, int width);
+
+int argparse_print_help(args_context_t* ctx);
+
 /// Unit test
 /// \return OK or FAIL
 int __acane__argparse_unit_test();

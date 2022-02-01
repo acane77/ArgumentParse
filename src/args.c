@@ -7,7 +7,7 @@
 
 #define OK     1
 #define FAIL   0
-//#define DEBUG
+#define DEBUG
 #ifdef DEBUG
 #define LOG(fmt, ...) printf("[%s:%d][ INFO  ] " fmt "\n", __FUNCTION__, __LINE__, ##__VA_ARGS__);
 #else
@@ -45,26 +45,26 @@ typedef struct arg_ctx_graph {
 	ctx_node_t* head;
 } ctx_graph_t;
 
-typedef ctx_node_t* val_array_element_t;
+typedef void* val_array_element_t;
 #define VALARRAY_CAPACITY_PER_INCREASE 10
 
 /* Variable length array for nodes */
 struct valarray {
-	val_array_element_t* nodes;
+	val_array_element_t* data;
 	size_t   capacity;
 	size_t   size;
 };
 
 int valarray_extend_capacity(valarray_t* arr) {
 	assert(arr && "arr is not initialized");
-	val_array_element_t* _old = arr->nodes;
+	val_array_element_t* _old = arr->data;
     val_array_element_t* _new = (val_array_element_t*)realloc((void*)_old, sizeof(val_array_element_t) * (arr->capacity + VALARRAY_CAPACITY_PER_INCREASE));
 	if (!_new) {
 		LOGE("allocate memory for capacity %lu failed", arr->capacity + 10);
 		return FAIL;
 	}
 	arr->capacity += VALARRAY_CAPACITY_PER_INCREASE;
-	arr->nodes = _new;
+	arr->data = _new;
 	return OK;
 }
 
@@ -76,7 +76,7 @@ int valarray_init(valarray_t** arr) {
 	}
 	(*arr)->capacity = 0;
 	(*arr)->size = 0;
-	(*arr)->nodes = NULL;
+	(*arr)->data = NULL;
 	return valarray_extend_capacity(*arr);
 }
 
@@ -87,34 +87,30 @@ int valarray_push_back(valarray_t* arr, val_array_element_t el) {
 			return ret;
 		}
 	}
-	arr->nodes[arr->size++] = el;
+	arr->data[arr->size++] = el;
 	return OK;
 }
 
 val_array_element_t* valarray_get(valarray_t* arr, size_t __i) {
 	assert(arr && "arr is not initialized");
-	assert(arr->nodes && "arr is not initialized");
+	assert(arr->data && "arr->data is not initialized");
 	if (arr->size <= __i) {
 		LOGE("index out of range, with [size=%zu, i=%zu]", arr->size, __i);
 		return NULL;
 	}
-	return &arr->nodes[__i];
-}
-
-int __valarray_default_el_cmp_fn(val_array_element_t* __lhs, val_array_element_t* __rhs) {
-	return (*__lhs)->ch - (*__rhs)->ch;
+	return &arr->data[__i];
 }
 
 size_t valarray_index_of(valarray_t* arr, val_array_element_t* x, int (*cmp)(val_array_element_t* __lhs, val_array_element_t* __rhs)) {
 	for (int i = 0; i < arr->size; ++i)
-		if (!cmp(&arr->nodes[i], x))
+		if (!cmp(&arr->data[i], x))
 			return i;
 	return -1;
 }
 
 size_t valarray_el_index_of(valarray_t* arr, int ch) {
 	for (int i = 0; i < arr->size; ++i)
-		if (arr->nodes[i]->ch == ch)
+		if (((ctx_node_t*)(arr->data[i]))->ch == ch)
 			return i;
 	return -1;
 }
@@ -181,6 +177,8 @@ void ctx_graph_free(ctx_graph_t* __g) {
 
 // =================================================================================
 
+#define _DEFAULT_HELP_LINE_WIDTH  (50)
+
 struct args_context {
 	ctx_graph_t* ctx_graph;
 	int (*error_handle)(const char* __msg);
@@ -193,6 +191,14 @@ struct args_context {
     int (*process_directive_positional)(int index, int argc, const char** argv); // returns 1 if processed directive
     int positional_minc;
     int positional_maxc;
+
+    // help message
+    int help_line_width;
+    int help_leading_spaces;
+    FILE* output_file;
+
+    // all arguments
+    valarray_t* args;
 };
 
 args_context_t* init_args_context() {
@@ -207,14 +213,20 @@ args_context_t* init_args_context() {
     ctx->positional_maxc = 0;
     ctx->positional_minc = 0;
     ctx->remove_ambiguous = 0;
+    ctx->help_line_width = _DEFAULT_HELP_LINE_WIDTH;
+    ctx->help_leading_spaces = 25;
+    ctx->output_file = stdout;
+    valarray_init(&ctx->args);
 	return ctx;
 }
 
 void deinit_args_context(args_context_t* ctx) {
+    if (!ctx) return;
 	if (ctx->ctx_graph)
         ctx_graph_free(ctx->ctx_graph);
-	if (ctx)
-		free(ctx);
+    if (ctx->args && ctx->args->data)
+        free(ctx->args->data);
+	free(ctx);
 }
 
 int argparse_set_positional_args(args_context_t* ctx, int minc, int maxc) {
@@ -227,7 +239,8 @@ int argparse_set_positional_args(args_context_t* ctx, int minc, int maxc) {
 
 int regsiter_parameter_on_graph(args_context_t* ctx, const char* param,
 		const char* description, int minc, int maxc,
-		void (*process)(int parac, const char** parav), int is_long_term, int is_directive) {
+		void (*process)(int parac, const char** parav), int is_long_term, int is_directive,
+        arg_info_t** arginfo) {
 	ctx_node_t* final_node = ctx_graph_add_nodes(ctx->ctx_graph, param);
 	if (!final_node) {
 		LOGE("add node for --%s failed", param);
@@ -247,6 +260,8 @@ int regsiter_parameter_on_graph(args_context_t* ctx, const char* param,
 	final_node->arg_info.min_parameter_count = minc;
 	final_node->arg_info.process = process;
     final_node->arg_info.directive_flag = is_directive;
+    if (arginfo)
+        *arginfo = &final_node->arg_info;
 	return OK;
 }
 
@@ -259,19 +274,26 @@ int add_parameter_with_args_(args_context_t* ctx, const char* long_term, char sh
         LOGE("at least one of long_term and short_term should be provided");
         return FAIL;
     }
+    arg_info_t* arginfo = NULL;
     // register short term
     if (short_term) {
         char __short_term[2] = { 0, 0 };
         __short_term[0] = short_term;
-        int ret = regsiter_parameter_on_graph(ctx, __short_term, description, minc, maxc, process, 0, is_directive);
+        int ret = regsiter_parameter_on_graph(ctx, __short_term, description, minc, maxc, process, 0, is_directive, &arginfo);
         if (ret != OK)
             return ret;
     }
     // register long term
     if (long_term) {
-        int ret = regsiter_parameter_on_graph(ctx, long_term, description, minc, maxc, process, 1, is_directive);
+        int ret = regsiter_parameter_on_graph(ctx, long_term, description, minc, maxc, process, 1, is_directive, &arginfo);
         if (ret != OK)
             return ret;
+    }
+    // register parameter on context
+    if (arginfo) {
+        if (short_term) arginfo->short_term = short_term;
+        valarray_push_back(ctx->args, (void *) arginfo);
+        LOG("add arg_info to args [args.size=%zu]", ctx->args->size);
     }
     return OK;
 }
@@ -553,6 +575,122 @@ void argparse_enable_remove_ambiguous(args_context_t* ctx) {
     ctx->remove_ambiguous = 1;
 }
 
+int argparse_print_set_help_msg_width(args_context_t* ctx, int width) {
+    if (!ctx) return FAIL;
+    ctx->help_line_width = width;
+    return OK;
+}
+
+size_t strlen_wd(const char* str) {
+    int ch, nextch;
+    const char* str_begin = str;
+    while (1) {
+        ch = *(str++);
+        if (!ch)      // end of string
+            break;
+        nextch = *str;
+        if (ch == ' ' && nextch != ' ') // [space][non-space]
+            break;
+    }
+    return str-str_begin-1;
+}
+
+void print_line_wrap(args_context_t* ctx, const char* str, int leading_spaces) {
+    int lwc=0; // line word count
+    int lcc=0; // line character count
+    int lccmax = ctx->help_line_width;
+    char* buf = malloc(strlen(str) + 1);
+    char* pbuf = buf;
+    strcpy(buf, str);
+    int flag = 1;
+    while (flag) {
+        size_t len = strlen_wd(str);
+        pbuf[len] = 0;
+        // LOG("current word: len=%zu [%s]", len, pbuf);
+        // try print
+        if (lcc+len > lccmax) {
+            if (lwc > 0) {
+                fprintf(ctx->output_file, "\n");
+                for (int i=0; i<leading_spaces; i++)
+                    fprintf(ctx->output_file, " ");
+                lcc = 0;
+            }
+        }
+        fprintf(ctx->output_file, "%s ", pbuf);
+        lcc = lcc+len+1;
+        lwc++;
+        // skip this word
+        pbuf += len + 1;  str += len + 1;
+        flag = *(str-1);
+    }
+}
+
+int print_help_print_addi_parameters_name(args_context_t* ctx, arg_info_t* __a, const char* str) {
+    if (str == NULL)
+        str = __a->max_parameter_count > 1 ? "ARG..." : "ARGS";
+    //size_t len = strlen(str);
+    // no parameter, print nothing
+    if (__a->max_parameter_count == 0) {
+        return 0;
+    }
+    // optional parameter
+    if (__a->min_parameter_count == 0) {
+        return fprintf(ctx->output_file, " [%s]", str);
+    }
+    // non-optional parameter
+    else {
+        return fprintf(ctx->output_file, " %s", str);
+    }
+    return 0;
+}
+
+int print_help_paramater_info(args_context_t* ctx, arg_info_t* arginfo) {
+    assert(ctx);
+    int _width = fprintf(ctx->output_file, "  ");
+    if (arginfo->short_term) {
+        _width += fprintf(ctx->output_file, "-%c", arginfo->short_term);
+        if (!arginfo->long_term && arginfo->min_parameter_count > 0) {
+            _width += print_help_print_addi_parameters_name(ctx, arginfo, NULL);
+        }
+    }
+    if (arginfo->long_term) {
+        if (arginfo->short_term) {
+            _width += printf(", ");
+        }
+        else {
+            _width += printf("    ");
+        }
+        _width += fprintf(ctx->output_file, "--%s", arginfo->long_term);
+        if (arginfo->max_parameter_count > 0) {
+            _width += print_help_print_addi_parameters_name(ctx, arginfo, NULL);
+        }
+    }
+    return _width;
+}
+
+int argparse_print_help(args_context_t* ctx) {
+    if (!ctx) return FAIL;
+    assert(ctx->args);
+    for (int i=0; i<ctx->args->size; i++) {
+        arg_info_t* __a = (arg_info_t *) ctx->args->data[i];
+        int width = print_help_paramater_info(ctx, __a);
+        //LOG("  short: %c   long: %s,  minc: %d, maxc: %d\n", __a->short_term, __a->long_term, __a->min_parameter_count, __a->max_parameter_count);
+        //LOG("    print count=%d", width);
+        if (ctx->help_leading_spaces - 1 <= width) {
+            fprintf(ctx->output_file, "\n");
+            width = 0;
+        }
+        int remain = ctx->help_leading_spaces - width;
+        for (int i=0; i<remain; i++)
+            fprintf(ctx->output_file, " ");
+        if (__a->description) {
+            print_line_wrap(ctx, __a->description, ctx->help_leading_spaces);
+        }
+        fprintf(ctx->output_file, "\n");
+    }
+    return OK;
+}
+
 // =================================================================================
 
 void __acane__unit_test_cb_process(int parac, const char** parav) {
@@ -572,7 +710,6 @@ int __acane__unit_test_cb_error_report(const char* __msg) {
 void __acane_unit_test_cb_process_positional(int index, const char* arg) {
     LOG("   GLOBAL %d:  %s", index, arg);
 }
-
 
 void __acane__unit_test__full_test() {
     const char* argv[] = {
@@ -594,6 +731,8 @@ void __acane__unit_test__full_test() {
     argparse_set_error_handle(ctx, __acane__unit_test_cb_error_report);
     argparse_set_positional_arg_process(ctx, __acane_unit_test_cb_process_positional);
     argparse_set_positional_args(ctx, 0, 3);
+
+    argparse_print_help(ctx);
     parse_args(ctx, argc, argv);
     deinit_args_context(ctx);
 }
@@ -645,7 +784,25 @@ void __acane__test_valarray() {
 	}
 }
 
+void __acane__test_print_wrap() {
+    args_context_t * ctx = init_args_context();
+    print_line_wrap(ctx, "The reason that they're distinct types is to (try to) prevent, or at least detect, errors in their use. If you declare an object of type int*, you're saying that you intend for it to point to an int object (if it's not a null pointer). Storing the address of a float object in your int* object is almost certainly a mistake. Enforcing type safety allows such mistakes to be detected as early as possible (when your compiler prints a warning rather than when your program crashes during a demo for an important client).",
+                    ctx->help_leading_spaces);
+    deinit_args_context(ctx);
+}
+
+void __acane__test_print() {
+    args_context_t * ctx = init_args_context();
+    argparse_add_parameter(ctx, "files", 0, "This is a test. This is a test. This is a test. This is a test. This is a test.", 1, 2, __acane__unit_test_cb_process);
+    argparse_add_parameter(ctx, "readable_items", 'R', "Load a readable item.", 1, 2, __acane__unit_test_cb_process);
+    argparse_add_parameter(ctx, "name", 'n', "This is a test. This is a test. This is a test. This is a test. This is a test.", 0, 1, __acane__unit_test_cb_process);
+    argparse_add_parameter(ctx, NULL, 'h', "This is a test. This is a test. This is a test. This is a test. This is a test.", 0, 0, __acane__unit_test_cb_process);
+    argparse_print_help(ctx);
+    deinit_args_context(ctx);
+}
+
 int __acane__argparse_unit_test() {
-    __acane__unit_test__full_test();
+    //__acane__unit_test__full_test();
+    __acane__test_print();
     return 0;
 }

@@ -140,7 +140,8 @@ void argument_parse(int argc, const char** argv) {
 }
 
 int main(int argc, const char** argv) {
-    //__acane__argparse_unit_test();
+    __acane__argparse_unit_test();
+    return 0;
     argument_parse(argc, argv);
     if (verbose_level != 0) {
         printf("set verbose level finally to %d\n", verbose_level);
