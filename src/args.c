@@ -4,16 +4,20 @@
 #include <stdlib.h>
 #include <string.h>
 #include <assert.h>
+#include <math.h>
 
 #define OK     1
 #define FAIL   0
-#define DEBUG
+//#define DEBUG
 #ifdef DEBUG
 #define LOG(fmt, ...) printf("[%s:%d][ INFO  ] " fmt "\n", __FUNCTION__, __LINE__, ##__VA_ARGS__);
 #else
 #define LOG(fmt, ...)
 #endif // DEBUG
 #define LOGE(fmt, ...) printf("[%s:%d][ ERROR ] " fmt "\n", __FUNCTION__, __LINE__, ##__VA_ARGS__);
+
+#define __ACANE_IN_OUT
+#define __ACANE_OUT
 
 /* Node */
 struct valarray;
@@ -116,6 +120,44 @@ size_t valarray_el_index_of(valarray_t* arr, int ch) {
 		if (((ctx_node_t*)(arr->data[i]))->ch == ch)
 			return i;
 	return -1;
+}
+/////
+
+void valarray_element_swap(val_array_element_t* a, val_array_element_t* b) {
+    val_array_element_t t = *a;
+    *a = *b;
+    *b = t;
+}
+
+// quick sort
+int valarray_quick_partition(valarray_t* arr, int s, int e, int (*cmp)(val_array_element_t a, val_array_element_t b)) {
+    int i=s, j=s;
+    val_array_element_t* x=arr->data[s];
+    for (; j<=e; j++)
+        if (cmp(arr->data[i], arr->data[j]))
+            valarray_element_swap(&arr->data[++i], &arr->data[j]);
+    valarray_element_swap(&arr->data[i], &arr->data[s]);
+    return i;
+}
+
+void valarray_quick_sort(valarray_t* arr, int s, int e, int (*cmp)(val_array_element_t a, val_array_element_t b)) {
+    if (s >= e)
+        return;
+    int m = valarray_quick_partition(arr, s, e, cmp);
+    valarray_quick_partition(arr, s, m-1, cmp);
+    valarray_quick_partition(arr, m+1, e, cmp);
+}
+
+void valarray_sort(valarray_t* arr, int (*cmp)(val_array_element_t a, val_array_element_t b)) {
+    assert(arr && cmp);
+    valarray_quick_sort(arr, 0, arr->size-1, cmp);
+}
+
+// foreach
+void valarray_foreach(valarray_t* arr, void (*fn)(val_array_element_t* el)) {
+    for (int i=0; i<arr->size; i++) {
+        fn(arr->data[i]);
+    }
 }
 
 // ==============================================================================
@@ -653,7 +695,7 @@ void print_line_wrap(args_context_t* ctx, const char* str, int leading_spaces) {
     }
 }
 
-int print_help_print_addi_parameters_name(args_context_t* ctx, arg_info_t* __a, const char* str) {
+int help_print_addi_parameters_name_to_str(arg_info_t* __a, const char* str, char* buf) {
     if (str == NULL)
         str = __a->max_parameter_count > 1 ? "ARG..." : "ARGS";
     //size_t len = strlen(str);
@@ -663,36 +705,42 @@ int print_help_print_addi_parameters_name(args_context_t* ctx, arg_info_t* __a, 
     }
     // optional parameter
     if (__a->min_parameter_count == 0) {
-        return fprintf(ctx->output_file, " [%s]", str);
+        return sprintf(buf, " [%s]", str);
     }
     // non-optional parameter
     else {
-        return fprintf(ctx->output_file, " %s", str);
+        return sprintf(buf, " %s", str);
     }
     return 0;
 }
 
-int print_help_paramater_info(args_context_t* ctx, arg_info_t* arginfo) {
+#define PRINT_HELP_PARAMETER_(str) do { \
+    _width += help_print_addi_parameters_name_to_str(arginfo, str, buf + _width);\
+} while (0)
+
+int print_help_paramater_info(args_context_t* ctx, arg_info_t* arginfo, char** _out_buf) {
     assert(ctx);
-    int _width = fprintf(ctx->output_file, "  ");
+    static char buf[1024];
+    int _width = sprintf(buf, "  ");
     if (arginfo->short_term) {
-        _width += fprintf(ctx->output_file, "-%c", arginfo->short_term);
+        _width += sprintf(buf + _width, "-%c", arginfo->short_term);
         if (!arginfo->long_term && arginfo->min_parameter_count > 0) {
-            _width += print_help_print_addi_parameters_name(ctx, arginfo, NULL);
+            PRINT_HELP_PARAMETER_(NULL);
         }
     }
     if (arginfo->long_term) {
         if (arginfo->short_term) {
-            _width += printf(", ");
+            _width += sprintf(buf + _width, ", ");
         }
         else {
-            _width += printf("    ");
+            _width += sprintf(buf + _width, "    ");
         }
-        _width += fprintf(ctx->output_file, "--%s", arginfo->long_term);
+        _width += sprintf(buf + _width, "--%s", arginfo->long_term);
         if (arginfo->max_parameter_count > 0) {
-            _width += print_help_print_addi_parameters_name(ctx, arginfo, NULL);
+            PRINT_HELP_PARAMETER_(NULL);
         }
     }
+    *_out_buf = buf;
     return _width;
 }
 
@@ -701,10 +749,12 @@ int argparse_print_help(args_context_t* ctx) {
     assert(ctx->args);
     for (int i=0; i<ctx->args->size; i++) {
         arg_info_t* __a = (arg_info_t *) ctx->args->data[i];
-        int width = print_help_paramater_info(ctx, __a);
+        const char* buf;
+        int width = print_help_paramater_info(ctx, __a, &buf);
+        fprintf(ctx->output_file, "%s", buf);
         //LOG("  short: %c   long: %s,  minc: %d, maxc: %d\n", __a->short_term, __a->long_term, __a->min_parameter_count, __a->max_parameter_count);
         //LOG("    print count=%d", width);
-        if (ctx->help_leading_spaces - 1 <= width) {
+        if (ctx->help_leading_spaces <= width) {
             fprintf(ctx->output_file, "\n");
             width = 0;
         }
@@ -717,6 +767,115 @@ int argparse_print_help(args_context_t* ctx) {
         fprintf(ctx->output_file, "\n");
     }
     return OK;
+}
+
+#define MAX_USAGE_LEADING_SPACE 25
+#define FOREACH_ARG_START \
+for (int i=0; i<ctx->args->size; i++) {\
+    arg_info_t* __a = ctx->args->data[i];
+#define FOREACH_ARG_END    }
+#define PRINT_USAGE_(fmt, ...) _width += fprintf(ctx->output_file, fmt, ##__VA_ARGS__)
+#define PRINT_USAGE_LEADING_SPACE_() do {\
+    for (int __i=0; __i<leading_spaces; __i++) {\
+        fprintf(ctx->output_file, " ");\
+    }\
+} while (0)
+int argparse_print_usage(args_context_t* ctx, const char* program_name) {
+    int pnlen = strlen(program_name) + strlen("usage: ") + 1;
+    int leading_spaces = pnlen < MAX_USAGE_LEADING_SPACE ? pnlen : MAX_USAGE_LEADING_SPACE;
+    LOG("LEADING SPACES=%d", leading_spaces);
+    int max_width = (ctx->help_leading_spaces + ctx->help_line_width - leading_spaces);
+    int _width = 0;
+    // print program name
+    PRINT_USAGE_("usage: %s ", program_name);
+    if (_width > leading_spaces) {
+        _width -= leading_spaces;
+    }
+    // restore width to 0 (real initial width)
+    _width = 0;
+
+    static char buf[1024];   // parameter in string
+
+    // print short required usage without parameter
+    int print_l = 0, print_e = 1;
+    FOREACH_ARG_START
+        if (__a->required && __a->short_term && __a->max_parameter_count == 0) {
+            if (!print_l) {
+                PRINT_USAGE_("-");
+                print_l = 1;
+            }
+            int w = sprintf(buf, "%c", __a->short_term);
+            if (w + _width > max_width) {
+                PRINT_USAGE_("\n");
+                PRINT_USAGE_LEADING_SPACE_();
+                _width = 0;
+                print_l = 0;
+            }
+            _width += fprintf(ctx->output_file, "%s", buf);
+        }
+    FOREACH_ARG_END
+    // print short optional usage without parameter
+    print_l = 0;
+    PRINT_USAGE_(" ");
+    FOREACH_ARG_START
+        if (!__a->required && __a->short_term && __a->max_parameter_count == 0) {
+            int w = sprintf(buf, "%c", __a->short_term);
+            if (w + _width > max_width) {
+                PRINT_USAGE_("]\n");
+                PRINT_USAGE_LEADING_SPACE_();
+                _width = 0;
+                print_e = 1;
+            }
+            if (!print_l) {
+                PRINT_USAGE_("[-");
+                print_l = 1;
+                print_e = 0;
+            }
+            _width += fprintf(ctx->output_file, "%s", buf);
+        }
+    FOREACH_ARG_END
+    if (!print_e) PRINT_USAGE_("] ");
+    // print long required usage, or short usage with args
+    FOREACH_ARG_START
+        if ((__a->required && !__a->short_term) || (__a->short_term && __a->required && __a->max_parameter_count > 0)) {
+            int w = (__a->required && !__a->short_term) ?
+                    sprintf(buf, "--%s%s", __a->long_term, __a->max_parameter_count > 0 ? "" : " ") :
+                    sprintf(buf, "-%c", __a->short_term);
+            // with arg
+            if (__a->max_parameter_count > 0) {
+                // optional parameter
+                w += help_print_addi_parameters_name_to_str(__a, NULL, buf + w);
+                w += sprintf(buf + w, " ");
+            }
+            if (w + _width > max_width) {
+                _width = 0;
+                fprintf(ctx->output_file, "\n");
+                PRINT_USAGE_LEADING_SPACE_();
+            }
+            PRINT_USAGE_("%s", buf);
+        }
+    FOREACH_ARG_END
+    // print long optional usage, or short usage with args
+    FOREACH_ARG_START
+        if ((!__a->required && !__a->short_term) || (__a->short_term && !__a->required && __a->max_parameter_count > 0)) {
+            int w = (!__a->required && !__a->short_term) ?
+                     sprintf(buf, "[--%s", __a->long_term) :
+                     sprintf(buf, "[-%c", __a->short_term);
+            // with arg
+            if (__a->max_parameter_count > 0) {
+                // optional parameter
+                w += help_print_addi_parameters_name_to_str(__a, NULL, buf + w);
+            }
+            w += sprintf(buf + w, "] ");
+            if (w + _width > max_width) {
+                _width = 0;
+                fprintf(ctx->output_file, "\n");
+                PRINT_USAGE_LEADING_SPACE_();
+            }
+            PRINT_USAGE_("%s", buf);
+
+        }
+    FOREACH_ARG_END
 }
 
 // =================================================================================
@@ -756,14 +915,24 @@ void __acane__unit_test__full_test() {
     argparse_add_parameter(ctx, "list", 'L', "list files", 0, 0, 0, __acane__unit_test_cb_process);
     argparse_add_parameter(ctx, "license", 0, "Show licenses", 0, 0, 0, __acane__unit_test_cb_process);
     argparse_add_parameter(ctx, "required", 'R', "Required", 0, 0, 1, __acane__unit_test_cb_process);
+    argparse_add_parameter(ctx, "required2", 'r', "Required", 0, 0, 1, __acane__unit_test_cb_process);
+    argparse_add_parameter(ctx, "required3", 0, "Required", 0, 0, 1, __acane__unit_test_cb_process);
+    argparse_add_parameter(ctx, "required4", 0, "Required", 0, 0, 1, __acane__unit_test_cb_process);
+    argparse_add_parameter(ctx, "required5", 0, "Required", 0, 1, 1, __acane__unit_test_cb_process);
+    argparse_add_parameter(ctx, "required6", 0, "Required", 1, 1, 1, __acane__unit_test_cb_process);
+    argparse_add_parameter(ctx, "optional1", 0, "Required", 0, 0, 0, __acane__unit_test_cb_process);
+    argparse_add_parameter(ctx, "optional2", 0, "Required", 0, 0, 0, __acane__unit_test_cb_process);
+    argparse_add_parameter(ctx, "optional5", 0, "Required", 1, 1, 0, __acane__unit_test_cb_process);
+    argparse_add_parameter(ctx, "optional3", 0, "Required", 0, 1, 0, __acane__unit_test_cb_process);
     argparse_add_parameter(ctx, "help", 'h', "Show help info", 0, 0, 0, __acane__unit_test_cb_process);
     argparse_add_parameter(ctx, NULL, 'l', "lll", 0, 0, 0, __acane__unit_test_cb_process);
+    argparse_add_parameter(ctx, NULL, 'o', "lll", 0, 0, 0, __acane__unit_test_cb_process);
     argparse_set_error_handle(ctx, __acane__unit_test_cb_error_report);
     argparse_set_positional_arg_process(ctx, __acane_unit_test_cb_process_positional);
     argparse_set_positional_args(ctx, 0, 3);
-
     argparse_print_help(ctx);
-    parse_args(ctx, argc, argv);
+    argparse_print_usage(ctx, "test");
+    //parse_args(ctx, argc, argv);
     deinit_args_context(ctx);
 }
 
@@ -791,18 +960,7 @@ void __acane__test_print_wrap() {
     deinit_args_context(ctx);
 }
 
-void __acane__test_print() {
-    args_context_t * ctx = init_args_context();
-    argparse_add_parameter(ctx, "files", 0, "This is a test. This is a test. This is a test. This is a test. This is a test.", 1, 2, 1, __acane__unit_test_cb_process);
-    argparse_add_parameter(ctx, "readable_items", 'R', "Load a readable item.", 1, 2, 0, __acane__unit_test_cb_process);
-    argparse_add_parameter(ctx, "name", 'n', "This is a test. This is a test. This is a test. This is a test. This is a test.", 0, 1, 0, __acane__unit_test_cb_process);
-    argparse_add_parameter(ctx, NULL, 'h', "This is a test. This is a test. This is a test. This is a test. This is a test.", 0, 0, 0, __acane__unit_test_cb_process);
-    argparse_print_help(ctx);
-    deinit_args_context(ctx);
-}
-
 int __acane__argparse_unit_test() {
     __acane__unit_test__full_test();
-    //__acane__test_print();
     return 0;
 }

@@ -35,6 +35,7 @@ void deinit_args_context(args_context_t* ctx);
 /// \param description description
 /// \param minc        min argument count
 /// \param maxc        min argument count
+/// \param required     if the parameter is quired
 /// \param process     callback to process function
 /// \return OK or FAIL
 int argparse_add_parameter(args_context_t* ctx, const char* long_term, char short_term,
@@ -48,6 +49,7 @@ int argparse_add_parameter(args_context_t* ctx, const char* long_term, char shor
 /// \param description description
 /// \param minc        min argument count
 /// \param maxc        min argument count
+/// \param required     if the parameter is quired
 /// \param process     callback to process function
 /// \return OK or FAIL
 int argparse_add_parameter_with_args(args_context_t* ctx, const char* long_term, char short_term,
@@ -58,6 +60,7 @@ int argparse_add_parameter_with_args(args_context_t* ctx, const char* long_term,
 /// \param ctx         pointer to context
 /// \param long_term   long term of the argument (e.g., --flag)
 /// \param description description
+/// \param required     if the parameter is quired
 /// \param process     callback to process function
 /// \return OK or FAIL
 int argparse_add_parameter_long_term(args_context_t* ctx, const char* long_term,
@@ -70,6 +73,7 @@ int argparse_add_parameter_long_term(args_context_t* ctx, const char* long_term,
 /// \param description description
 /// \param minc        min argument count
 /// \param maxc        min argument count
+/// \param required     if the parameter is quired
 /// \param process     callback to process function
 /// \return OK or FAIL
 int argparse_add_parameter_long_term_with_args(args_context_t* ctx, const char* long_term,
@@ -80,6 +84,7 @@ int argparse_add_parameter_long_term_with_args(args_context_t* ctx, const char* 
 /// \param ctx         pointer to context
 /// \param short_term  short term of the argument (e.g., -f)
 /// \param description description
+/// \param required     if the parameter is quired
 /// \param process     callback to process function
 /// \return OK or FAIL
 int argparse_add_parameter_short_term(args_context_t* ctx, char short_term,
@@ -92,6 +97,7 @@ int argparse_add_parameter_short_term(args_context_t* ctx, char short_term,
 /// \param description description
 /// \param minc        min argument count
 /// \param maxc        min argument count
+/// \param required     if the parameter is quired
 /// \param process     callback to process function (parac: count of args, parav: args for the flags)
 /// \return OK or FAIL
 int argparse_add_parameter_short_term_with_args(args_context_t* ctx, char short_term,
@@ -103,6 +109,7 @@ int argparse_add_parameter_short_term_with_args(args_context_t* ctx, char short_
 /// \param long_term    long term of the argument (e.g., --flag)
 /// \param short_term   short term of the argument (e.g., -f)
 /// \param description  description
+/// \param required     if the parameter is quired
 /// \param process      callback to process function (this function returns 1 if is processed by directive)
 /// \return OK or FAIL
 int argparse_add_parameter_directive(args_context_t* ctx, const char* long_term, char short_term,
@@ -137,9 +144,18 @@ int argparse_set_directive_positional_arg_process(args_context_t* ctx, int (*pro
 /// \return OK or FAIL
 int parse_args(args_context_t* ctx, int argc, const char** argv);
 
+/// Set help message display width
+/// \param ctx   pointer to context
+/// \param width width of help message
+/// \return OK or FAIL
 int argparse_print_set_help_msg_width(args_context_t* ctx, int width);
 
+/// Print help message for registered parameters
+/// \param ctx   pointer to context
+/// \return OK or FAIL
 int argparse_print_help(args_context_t* ctx);
+
+int argparse_print_usage(args_context_t* ctx, const char* program_name);
 
 /// Unit test
 /// \return OK or FAIL
