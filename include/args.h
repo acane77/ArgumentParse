@@ -9,7 +9,7 @@ extern "C" {
 #endif
 
 #define PARAMETER_NO_ARGS             0
-#define PARAMETER_ARGS_COUNT_NO_LIMIT (1 << 16 - 1)
+#define PARAMETER_ARGS_COUNT_NO_LIMIT 32767
 #define PARAMETER_NO_SHORT_TERM       0
 #define PARAMETER_NO_LONG_TERM        NULL
 
@@ -38,7 +38,7 @@ void deinit_args_context(args_context_t* ctx);
 /// \param process     callback to process function
 /// \return OK or FAIL
 int argparse_add_parameter(args_context_t* ctx, const char* long_term, char short_term,
-                   const char* description, int minc, int maxc,
+                   const char* description, int minc, int maxc, int required,
                    void (*process)(int parac, const char** parav));
 
 /// Add parameter meta information
@@ -51,7 +51,7 @@ int argparse_add_parameter(args_context_t* ctx, const char* long_term, char shor
 /// \param process     callback to process function
 /// \return OK or FAIL
 int argparse_add_parameter_with_args(args_context_t* ctx, const char* long_term, char short_term,
-                   const char* description, int minc, int maxc,
+                   const char* description, int minc, int maxc, int required,
                    void (*process)(int parac, const char** parav));
 
 /// Add parameter meta information (with only long term, without parameter)
@@ -61,7 +61,7 @@ int argparse_add_parameter_with_args(args_context_t* ctx, const char* long_term,
 /// \param process     callback to process function
 /// \return OK or FAIL
 int argparse_add_parameter_long_term(args_context_t* ctx, const char* long_term,
-                   const char* description,
+                   const char* description, int required,
                    void (*process)(int parac, const char** parav));
 
 /// Add parameter meta information (with only long term)
@@ -73,7 +73,7 @@ int argparse_add_parameter_long_term(args_context_t* ctx, const char* long_term,
 /// \param process     callback to process function
 /// \return OK or FAIL
 int argparse_add_parameter_long_term_with_args(args_context_t* ctx, const char* long_term,
-                    const char* description, int minc, int maxc,
+                    const char* description, int minc, int maxc, int required,
                     void (*process)(int parac, const char** parav));
 
 /// Add parameter meta information (with only short term)
@@ -83,7 +83,7 @@ int argparse_add_parameter_long_term_with_args(args_context_t* ctx, const char* 
 /// \param process     callback to process function
 /// \return OK or FAIL
 int argparse_add_parameter_short_term(args_context_t* ctx, char short_term,
-                    const char* description,
+                    const char* description, int required,
                     void (*process)(int parac, const char** parav));
 
 /// Add parameter meta information (with only short term)
@@ -95,7 +95,7 @@ int argparse_add_parameter_short_term(args_context_t* ctx, char short_term,
 /// \param process     callback to process function (parac: count of args, parav: args for the flags)
 /// \return OK or FAIL
 int argparse_add_parameter_short_term_with_args(args_context_t* ctx, char short_term,
-                    const char* description, int minc, int maxc,
+                    const char* description, int minc, int maxc, int required,
                     void (*process)(int parac, const char** parav));
 
 /// Add directive meta information
@@ -106,7 +106,7 @@ int argparse_add_parameter_short_term_with_args(args_context_t* ctx, char short_
 /// \param process      callback to process function (this function returns 1 if is processed by directive)
 /// \return OK or FAIL
 int argparse_add_parameter_directive(args_context_t* ctx, const char* long_term, char short_term,
-                                     const char* description, void (*process)(int parac, const char** parav));
+                                     const char* description,  int required, void (*process)(int parac, const char** parav));
 
 /// Enable remove ambiguous (--) flags
 /// \param ctx   pointer to context

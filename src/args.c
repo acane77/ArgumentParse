@@ -30,13 +30,16 @@ typedef struct arg_info {
 	int         max_parameter_count;
     int         directive_flag;   // treat all flags after into parameter of this flag
 	void        (*process)(int parac, const char** parav); // no free parav!
+
+    int         required;
+    int         _requirement_satisfied_sign;
 } arg_info_t;
 
 /* graph nodes */
 typedef struct arg_ctx_node {
 	char        ch;     
 	valarray_t* children;
-	arg_info_t  arg_info;
+	arg_info_t* arg_info;
 	int         _arg_sign;
 } ctx_node_t;
 
@@ -238,7 +241,7 @@ int argparse_set_positional_args(args_context_t* ctx, int minc, int maxc) {
 }
 
 int regsiter_parameter_on_graph(args_context_t* ctx, const char* param,
-		const char* description, int minc, int maxc,
+		const char* description, int minc, int maxc, int required,
 		void (*process)(int parac, const char** parav), int is_long_term, int is_directive,
         arg_info_t** arginfo) {
 	ctx_node_t* final_node = ctx_graph_add_nodes(ctx->ctx_graph, param);
@@ -251,22 +254,32 @@ int regsiter_parameter_on_graph(args_context_t* ctx, const char* param,
 		return FAIL;
 	}
 	final_node->_arg_sign = ACANE_SIGN;
-	final_node->arg_info.description = description;
+    if (arginfo && *arginfo)
+        // already as a corresponding arg_info
+        final_node->arg_info = *arginfo;
+    else
+        final_node->arg_info = (arg_info_t*) malloc(sizeof(arg_info_t));
 	if (is_long_term)
-		final_node->arg_info.long_term = param;
+		final_node->arg_info->long_term = param;
 	else
-		final_node->arg_info.short_term = param[0];
-	final_node->arg_info.max_parameter_count = maxc;
-	final_node->arg_info.min_parameter_count = minc;
-	final_node->arg_info.process = process;
-    final_node->arg_info.directive_flag = is_directive;
+		final_node->arg_info->short_term = param[0];
+    if (arginfo && *arginfo) {
+        LOG("arginfo already registered, skip");
+        return OK;
+    }
+    final_node->arg_info->description = description;
+	final_node->arg_info->max_parameter_count = maxc;
+	final_node->arg_info->min_parameter_count = minc;
+	final_node->arg_info->process = process;
+    final_node->arg_info->directive_flag = is_directive;
+    final_node->arg_info->required = required;
     if (arginfo)
-        *arginfo = &final_node->arg_info;
+        *arginfo = final_node->arg_info;
 	return OK;
 }
 
 int add_parameter_with_args_(args_context_t* ctx, const char* long_term, char short_term,
-                            const char* description, int minc, int maxc,
+                            const char* description, int minc, int maxc, int required,
                             void (*process)(int parac, const char** parav),
                             int is_directive) {
     if (!ctx) return FAIL;
@@ -279,13 +292,13 @@ int add_parameter_with_args_(args_context_t* ctx, const char* long_term, char sh
     if (short_term) {
         char __short_term[2] = { 0, 0 };
         __short_term[0] = short_term;
-        int ret = regsiter_parameter_on_graph(ctx, __short_term, description, minc, maxc, process, 0, is_directive, &arginfo);
+        int ret = regsiter_parameter_on_graph(ctx, __short_term, description, minc, maxc, required, process, 0, is_directive, &arginfo);
         if (ret != OK)
             return ret;
     }
     // register long term
     if (long_term) {
-        int ret = regsiter_parameter_on_graph(ctx, long_term, description, minc, maxc, process, 1, is_directive, &arginfo);
+        int ret = regsiter_parameter_on_graph(ctx, long_term, description, minc, maxc, required, process, 1, is_directive, &arginfo);
         if (ret != OK)
             return ret;
     }
@@ -299,50 +312,50 @@ int add_parameter_with_args_(args_context_t* ctx, const char* long_term, char sh
 }
 
 int add_parameter_with_args(args_context_t* ctx, const char* long_term, char short_term,
-				  const char* description, int minc, int maxc,
+				  const char* description, int minc, int maxc, int required,
 				  void (*process)(int parac, const char** parav)) {
-	return add_parameter_with_args_(ctx, long_term, short_term, description, minc, maxc, process, 0);
+	return add_parameter_with_args_(ctx, long_term, short_term, description, minc, maxc, required, process, 0);
 }
 
 int argparse_add_parameter_directive(args_context_t* ctx, const char* long_term, char short_term,
-                                     const char* description, void (*process)(int parac, const char** parav)) {
-    return add_parameter_with_args_(ctx, long_term, short_term, description, 0, PARAMETER_ARGS_COUNT_NO_LIMIT,
+                                     const char* description,  int required, void (*process)(int parac, const char** parav)) {
+    return add_parameter_with_args_(ctx, long_term, short_term, description, 0, PARAMETER_ARGS_COUNT_NO_LIMIT, required,
                                     process, 1);
 }
 
 int argparse_add_parameter(args_context_t* ctx, const char* long_term, char short_term,
-	const char* description, int minc, int maxc,
+	const char* description, int minc, int maxc, int required,
 	void (*process)(int parac, const char** parav)) {
 	return add_parameter_with_args(ctx, long_term, short_term,
-		description, minc, maxc, process);
+		description, minc, maxc, required, process);
 }
 
 int argparse_add_parameter_long_term(args_context_t* ctx, const char* long_term,
-	const char* description,
+	const char* description, int required,
 	void (*process)(int parac, const char** parav)) {
 	return add_parameter_with_args(ctx, long_term, PARAMETER_NO_SHORT_TERM,
-		description, PARAMETER_NO_ARGS, PARAMETER_NO_ARGS, process);
+		description, PARAMETER_NO_ARGS, PARAMETER_NO_ARGS, required, process);
 }
 
 int argparse_add_parameter_long_term_with_args(args_context_t* ctx, const char* long_term,
-	const char* description, int minc, int maxc,
+	const char* description, int minc, int maxc, int required,
 	void (*process)(int parac, const char** parav)) {
 	return add_parameter_with_args(ctx, long_term, PARAMETER_NO_SHORT_TERM,
-		description, minc, maxc, process);
+		description, minc, maxc, required, process);
 }
 
 int argparse_add_parameter_short_term(args_context_t* ctx, char short_term,
-	const char* description,
+	const char* description, int required,
 	void (*process)(int parac, const char** parav)) {
 	return add_parameter_with_args(ctx, PARAMETER_NO_LONG_TERM, short_term,
-		description, PARAMETER_NO_ARGS, PARAMETER_NO_ARGS, process);
+		description, PARAMETER_NO_ARGS, PARAMETER_NO_ARGS, required, process);
 }
 
 int argparse_add_parameter_short_term_with_args(args_context_t* ctx, char short_term,
-	const char* description, int minc, int maxc,
+	const char* description, int minc, int maxc, int required,
 	void (*process)(int parac, const char** parav)) {
 	return add_parameter_with_args(ctx, PARAMETER_NO_LONG_TERM, short_term,
-		description, minc, maxc, process);
+		description, minc, maxc, required, process);
 }
 
 int argparse_set_error_handle(args_context_t* ctx, int (*hnd)(const char* __msg)) {
@@ -398,8 +411,10 @@ arg_info_t* get_parameter_from_graph(args_context_t* ctx, const char* arg) {
         }
     }
 
-    if (node->_arg_sign == ACANE_SIGN) // ????
-        return &node->arg_info;
+    if (node->_arg_sign == ACANE_SIGN) {
+        node->arg_info->_requirement_satisfied_sign = ACANE_SIGN;
+        return node->arg_info;
+    }
     // no arg bound to this node
     return NULL;
 }
@@ -554,9 +569,17 @@ final_check:
     if (ctx->current_arg && ctx->current_arg->min_parameter_count > 0) {
         CHECK_ADDITIONAL_ARGS();
     }
+    // check required positional arguments
     if (ctx->positional_minc > __global_positonal_argc) {
         PARSEARG_REPORT_ERROR("%d positional args provided, expected at least %d positional args",
                               __global_positonal_argc, ctx->positional_minc);
+    }
+    // check required arguments
+    for (int i=0; i<ctx->args->size; i++) {
+        arg_info_t* __a = (arg_info_t*)ctx->args->data[i];
+        if (__a->required && __a->_requirement_satisfied_sign != ACANE_SIGN) {
+            PARSEARG_REPORT_ERROR("missing required arg: --%s", arg_info_to_string(__a));
+        }
     }
     return OK;
 }
@@ -716,18 +739,20 @@ void __acane__unit_test__full_test() {
             "/Users/acane/__acane__argparse_unit_test",
             "-O", "__acane__argparse_unit_test", "-Ohhhh",
             "--files", "file1", "file2", "file3",
-            "--license", "-lh", "--fil", "file3", "file4", "file3", "file4",
-            "--li",
+            "--license", "-h", "--fil", "file3", "file4", "file3", "file4",
+            "--requi"
+            //"--li",
     };
     int argc = sizeof(argv) / sizeof(const char*) - 1;
 
     args_context_t* ctx = init_args_context();
-    argparse_add_parameter(ctx, "optional", 'O', "optional", 0, 1, __acane__unit_test_cb_process);
-    argparse_add_parameter(ctx, "files", 'f', "specify files", 1, 2, __acane__unit_test_cb_process);
-    argparse_add_parameter(ctx, "list", 'L', "list files", 0, 0, __acane__unit_test_cb_process);
-    argparse_add_parameter(ctx, "license", 0, "Show licenses", 0, 0, __acane__unit_test_cb_process);
-    argparse_add_parameter(ctx, "help", 'h', "Show help info", 0, 0, __acane__unit_test_cb_process);
-    argparse_add_parameter(ctx, NULL, 'l', "lll", 0, 0, __acane__unit_test_cb_process);
+    argparse_add_parameter(ctx, "optional", 'O', "optional", 0, 1, 0, __acane__unit_test_cb_process);
+    argparse_add_parameter(ctx, "files", 'f', "specify files", 1, 2, 0, __acane__unit_test_cb_process);
+    argparse_add_parameter(ctx, "list", 'L', "list files", 0, 0, 0, __acane__unit_test_cb_process);
+    argparse_add_parameter(ctx, "license", 0, "Show licenses", 0, 0, 0, __acane__unit_test_cb_process);
+    argparse_add_parameter(ctx, "required", 'R', "Required", 0, 0, 1, __acane__unit_test_cb_process);
+    argparse_add_parameter(ctx, "help", 'h', "Show help info", 0, 0, 0, __acane__unit_test_cb_process);
+    argparse_add_parameter(ctx, NULL, 'l', "lll", 0, 0, 0, __acane__unit_test_cb_process);
     argparse_set_error_handle(ctx, __acane__unit_test_cb_error_report);
     argparse_set_positional_arg_process(ctx, __acane_unit_test_cb_process_positional);
     argparse_set_positional_args(ctx, 0, 3);
@@ -739,10 +764,10 @@ void __acane__unit_test__full_test() {
 
 void __acane__test_args() {
 	args_context_t* ctx = init_args_context();
-    argparse_add_parameter(ctx, "list", 'L', "list files", 0, 0, NULL);
-    argparse_add_parameter(ctx, "license", 0, "Show licenses", 0, 0, NULL);
-    argparse_add_parameter(ctx, "help", 'h', "Show help info", 0, 0, NULL);
-    argparse_add_parameter(ctx, NULL, 'l', "lll", 0, 0, NULL);
+    argparse_add_parameter(ctx, "list", 'L', "list files", 0, 0, 0, NULL);
+    argparse_add_parameter(ctx, "license", 0, "Show licenses", 0, 0, 0, NULL);
+    argparse_add_parameter(ctx, "help", 'h', "Show help info", 0, 0, 0, NULL);
+    argparse_add_parameter(ctx, NULL, 'l', "lll", 0, 0, 0, NULL);
 	deinit_args_context(ctx);
 }
 
@@ -754,36 +779,6 @@ void __acane__test_graph() {
 	ctx_graph_add_nodes(graph, "license");
 }
 
-void __acane__test_valarray() {
-	ctx_node_t n1 = { 'a', NULL };
-	ctx_node_t n2 = { 'b', NULL };
-	valarray_t* arr;
-	valarray_init(&arr);
-	valarray_push_back(arr, &n1);
-	valarray_push_back(arr, &n1);
-	valarray_push_back(arr, &n1);
-	valarray_push_back(arr, &n1);
-	valarray_push_back(arr, &n1);
-	valarray_push_back(arr, &n2);
-	valarray_push_back(arr, &n2);
-	valarray_push_back(arr, &n2);
-	valarray_push_back(arr, &n2);
-	valarray_push_back(arr, &n1);
-	valarray_push_back(arr, &n1);
-	valarray_push_back(arr, &n1);
-	valarray_push_back(arr, &n1);
-	valarray_push_back(arr, &n1);
-	valarray_push_back(arr, &n2);
-	valarray_push_back(arr, &n2);
-	valarray_push_back(arr, &n2);
-	valarray_push_back(arr, &n2);
-
-	for (int i = 0; i < arr->size; i++) {
-		ctx_node_t** n = valarray_get(arr, i);
-		LOG("  arr[%d]=%c (%d)", i, (*n)->ch, (*n)->ch);
-	}
-}
-
 void __acane__test_print_wrap() {
     args_context_t * ctx = init_args_context();
     print_line_wrap(ctx, "The reason that they're distinct types is to (try to) prevent, or at least detect, errors in their use. If you declare an object of type int*, you're saying that you intend for it to point to an int object (if it's not a null pointer). Storing the address of a float object in your int* object is almost certainly a mistake. Enforcing type safety allows such mistakes to be detected as early as possible (when your compiler prints a warning rather than when your program crashes during a demo for an important client).",
@@ -793,16 +788,16 @@ void __acane__test_print_wrap() {
 
 void __acane__test_print() {
     args_context_t * ctx = init_args_context();
-    argparse_add_parameter(ctx, "files", 0, "This is a test. This is a test. This is a test. This is a test. This is a test.", 1, 2, __acane__unit_test_cb_process);
-    argparse_add_parameter(ctx, "readable_items", 'R', "Load a readable item.", 1, 2, __acane__unit_test_cb_process);
-    argparse_add_parameter(ctx, "name", 'n', "This is a test. This is a test. This is a test. This is a test. This is a test.", 0, 1, __acane__unit_test_cb_process);
-    argparse_add_parameter(ctx, NULL, 'h', "This is a test. This is a test. This is a test. This is a test. This is a test.", 0, 0, __acane__unit_test_cb_process);
+    argparse_add_parameter(ctx, "files", 0, "This is a test. This is a test. This is a test. This is a test. This is a test.", 1, 2, 0, __acane__unit_test_cb_process);
+    argparse_add_parameter(ctx, "readable_items", 'R', "Load a readable item.", 1, 2, 0, __acane__unit_test_cb_process);
+    argparse_add_parameter(ctx, "name", 'n', "This is a test. This is a test. This is a test. This is a test. This is a test.", 0, 1, 0, __acane__unit_test_cb_process);
+    argparse_add_parameter(ctx, NULL, 'h', "This is a test. This is a test. This is a test. This is a test. This is a test.", 0, 0, 0, __acane__unit_test_cb_process);
     argparse_print_help(ctx);
     deinit_args_context(ctx);
 }
 
 int __acane__argparse_unit_test() {
-    //__acane__unit_test__full_test();
-    __acane__test_print();
+    __acane__unit_test__full_test();
+    //__acane__test_print();
     return 0;
 }

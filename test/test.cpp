@@ -54,7 +54,7 @@ int cb_process_direcive_positional(int index, int argc, const char** argv) {
         }
 
         args_context_t* ctx = init_args_context();
-        argparse_add_parameter(ctx, "help", 'h', "Show help message", 0, 0, show_help_for_add);
+        argparse_add_parameter(ctx, "help", 'h', "Show help message", 0, 0, 0, show_help_for_add);
         argparse_set_error_handle(ctx, cb_error_report);
         argparse_set_positional_arg_process(ctx, cb_process_positional);
         argparse_set_directive_positional_arg_process(ctx, cb_process_direcive_positional);
@@ -76,7 +76,7 @@ void cb_process_add(int parac, const char** parav) {
         printf("   [%d] %s\n", i, parav[i]);
     }
     args_context_t* ctx = init_args_context();
-    argparse_add_parameter(ctx, "help", 'h', "Show help message", 0, 0, show_help_for_add);
+    argparse_add_parameter(ctx, "help", 'h', "Show help message", 0, 0, 0, show_help_for_add);
     argparse_set_error_handle(ctx, cb_error_report);
     argparse_set_positional_arg_process(ctx, cb_process_positional);
     argparse_set_directive_positional_arg_process(ctx, cb_process_direcive_positional);
@@ -116,15 +116,15 @@ Options:
 
 void argument_parse(int argc, const char** argv) {
     args_context_t* ctx = init_args_context();
-    argparse_add_parameter(ctx, "read", 'r', "Read", 0, 0, cb_process_read);
-    argparse_add_parameter(ctx, "write", 'w', "Write", 0, 0, cb_process_write);
-    argparse_add_parameter(ctx, "binary", 'b', "Binary", 0, 0, cb_process_binary);
-    argparse_add_parameter(ctx, "save", 's', "ave, or save to another file(s)", 0, 100, cb_process_save);
-    argparse_add_parameter(ctx, "help", 'h', "Show help message", 0, 0, show_help);
-    argparse_add_parameter(ctx, "verbose", 'v', "Use this flag to set verbose level", 0, 0, cb_process_verbose);
-    argparse_add_parameter(ctx, "version", 0, "Version", 0, 0, cb_process_version);
-    argparse_add_parameter(ctx, NULL, 'E', "Set encoding", 1, 1, cb_process_encoding);
-    argparse_add_parameter_directive(ctx, "add", 'a', "Add", cb_process_add);
+    argparse_add_parameter(ctx, "read", 'r', "Read", 0, 0, 0, cb_process_read);
+    argparse_add_parameter(ctx, "write", 'w', "Write", 0, 0, 0, cb_process_write);
+    argparse_add_parameter(ctx, "binary", 'b', "Binary", 0, 0, 0, cb_process_binary);
+    argparse_add_parameter(ctx, "save", 's', "ave, or save to another file(s)", 0, 100, 0, cb_process_save);
+    argparse_add_parameter(ctx, "help", 'h', "Show help message", 0, 0, 0, show_help);
+    argparse_add_parameter(ctx, "verbose", 'v', "Use this flag to set verbose level", 0, 0, 0, cb_process_verbose);
+    argparse_add_parameter(ctx, "version", 0, "Version", 0, 0, 0, cb_process_version);
+    argparse_add_parameter(ctx, NULL, 'E', "Set encoding", 1, 1, 0, cb_process_encoding);
+    argparse_add_parameter_directive(ctx, "add", 'a', "Add", 0, cb_process_add);
     argparse_set_error_handle(ctx, cb_error_report);
     argparse_set_positional_arg_process(ctx, cb_process_positional);
     argparse_set_directive_positional_arg_process(ctx, cb_process_direcive_positional);
