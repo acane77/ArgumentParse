@@ -30,7 +30,28 @@ SOFTWARE.
 #include <stdio.h>
 
 struct args_context;
+
+/// Context to hold arguments information
 typedef struct args_context args_context_t;
+
+struct parse_result;
+
+/// Argument parse result
+typedef struct parse_result parse_result_t;
+
+/// Parsed argument
+typedef struct parsed_argument {
+    /// Count of occurrence
+    int count;
+
+    /// Parameter count
+    int parac;
+
+    /// Parameter values
+    /// Note: the value is directly come from argv that passed to parse_args,
+    ///       ensure the values are not freed when use this.
+    const char** parav;
+} parsed_argument_t;
 
 #ifdef __cplusplus
 extern "C" {
@@ -71,8 +92,8 @@ void deinit_args_context(args_context_t* ctx);
 /// \param description description
 /// \param minc        min argument count
 /// \param maxc        min argument count
-/// \param required     if the parameter is quired
-/// \param process     callback to process function
+/// \param required    if the parameter is quired
+/// \param process     callback to additional process function (NULL if no other processes)
 /// \return OK or FAIL
 int argparse_add_parameter(args_context_t* ctx, const char* long_term, char short_term,
                    const char* description, int minc, int maxc, int required,
@@ -87,7 +108,7 @@ int argparse_add_parameter(args_context_t* ctx, const char* long_term, char shor
 /// \param maxc        min argument count
 /// \param required    if the parameter is quired
 /// \param arg_name    name of argument
-/// \param process     callback to process function
+/// \param process     callback to additional process function (NULL if no other processes)
 /// \return OK or FAIL
 int argparse_add_parameter_with_args(args_context_t* ctx, const char* long_term, char short_term,
                    const char* description, int minc, int maxc, int required, const char* arg_name,
@@ -104,7 +125,7 @@ int argparse_set_parameter_name(args_context_t* ctx, const char* arg_name);
 /// \param long_term   long term of the argument (e.g., --flag)
 /// \param description description
 /// \param required    if the parameter is required
-/// \param process     callback to process function
+/// \param process     callback to additional process function (NULL if no other processes)
 /// \return OK or FAIL
 int argparse_add_parameter_long_term(args_context_t* ctx, const char* long_term,
                    const char* description, int required,
@@ -117,7 +138,7 @@ int argparse_add_parameter_long_term(args_context_t* ctx, const char* long_term,
 /// \param minc        min argument count
 /// \param maxc        min argument count
 /// \param required    if the parameter is required
-/// \param process     callback to process function
+/// \param process     callback to additional process function (NULL if no other processes)
 /// \return OK or FAIL
 int argparse_add_parameter_long_term_with_args(args_context_t* ctx, const char* long_term,
                     const char* description, int minc, int maxc, int required,
@@ -128,7 +149,7 @@ int argparse_add_parameter_long_term_with_args(args_context_t* ctx, const char* 
 /// \param short_term  short term of the argument (e.g., -f)
 /// \param description description
 /// \param required    if the parameter is required
-/// \param process     callback to process function
+/// \param process     callback to additional process function (NULL if no other processes)
 /// \return OK or FAIL
 int argparse_add_parameter_short_term(args_context_t* ctx, char short_term,
                     const char* description, int required,
@@ -141,7 +162,7 @@ int argparse_add_parameter_short_term(args_context_t* ctx, char short_term,
 /// \param minc        min argument count
 /// \param maxc        min argument count
 /// \param required    if the parameter is required
-/// \param process     callback to process function (parac: count of args, parav: args for the flags)
+/// \param process     callback to additional process function (NULL if no other processes) (parac: count of args, parav: args for the flags)
 /// \return OK or FAIL
 int argparse_add_parameter_short_term_with_args(args_context_t* ctx, char short_term,
                     const char* description, int minc, int maxc, int required,
@@ -239,6 +260,34 @@ int argparse_print_help_usage(args_context_t* ctx, const char* program_name, con
 /// \param file  pointer to FILE object (e.g., stdout, stderr)
 /// \return
 int argparse_set_print_file(args_context_t* ctx, FILE* file);
+
+/// Reset context env (normally, no need to call this function)
+/// \param ctx   pointer to context
+/// \return
+int argparse_reset_env(args_context_t* ctx);
+
+/// Get the last parse result after call parse_args()
+///  * the callee will take control of this object, you should free it yourself
+/// \param ctx   pointer to context
+/// \return
+parse_result_t* argparse_get_last_parse_result(args_context_t* ctx);
+
+/// Free parse result object
+/// \param _r    pointer to parse result
+void argparse_parse_result_deinit(parse_result_t* _r);
+
+/// Get parsed argument result by argument name
+/// \param _r       pointer to parse result
+/// \param argname  argument name, can be both short term and long term
+/// \param _out_a   pointer to parsed_argument_t to receive value
+/// \return
+int argparse_get_parsed_arg(parse_result_t* _r, const char* argname, parsed_argument_t* _out_a);
+
+///  Get count of argument occurrence
+/// \param _r       pointer to parse result
+/// \param argname  argument name, can be both short term and long term
+/// \return
+int argparse_count(parse_result_t* _r, const char* argname);
 
 /// Unit test
 /// \return OK or FAIL

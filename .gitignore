@@ -82,3 +82,7 @@ build-*/
 .idea/
 
 .cmake_conf.json
+
+# Doxygen
+html/
+latex/

@@ -25,6 +25,8 @@ typedef struct valarray valarray_t;
 
 #define ACANE_SIGN 0x77061584
 
+struct parse_result_item;
+
 /* Arguments info */
 typedef struct arg_info {
     const char* long_term;
@@ -34,12 +36,25 @@ typedef struct arg_info {
     int         max_parameter_count;
     int         directive_flag;   // treat all flags after into parameter of this flag
     void        (*process)(int parac, const char** parav); // no free parav!
-
     int         required;
+    const char* arg_name;
+
+    // env
     int         _requirement_satisfied_sign;
     int         _arg_name_sign;
-    const char* arg_name;
+    struct parse_result_item* result_item;
 } arg_info_t;
+
+typedef struct parse_result_item {
+    arg_info_t* arginfo;
+    int count;
+    valarray_t* args; // type: const char*
+} parse_result_item_t;
+
+struct parse_result {
+    valarray_t* args;  // type: parse_result_item_t
+    int keep_this_obj; // keep this obj, do not auto free
+};
 
 /* graph nodes */
 typedef struct arg_ctx_node {
@@ -162,6 +177,13 @@ void valarray_foreach(valarray_t* arr, void (*fn)(val_array_element_t* el)) {
     }
 }
 
+// free
+void valarray_deinit(valarray_t* arr) {
+    if (!arr) return;
+    if (!arr->data) return;
+    free(arr->data);
+}
+
 // ==============================================================================
 
 ctx_node_t* ctx_node_init(int ch) {
@@ -231,7 +253,6 @@ struct args_context {
     ctx_graph_t* ctx_graph;
     int (*error_handle)(const char* __msg);
     int current_addi_arg_count;
-    arg_info_t* current_arg;
     int remove_ambiguous;
 
     // process positional args
@@ -249,6 +270,10 @@ struct args_context {
     valarray_t* args;
     valarray_t* positional_args;
     valarray_t* positional_args_description;
+
+    // env
+    arg_info_t* current_arg;
+    parse_result_t* last_result;
 };
 
 args_context_t* init_args_context() {
@@ -269,11 +294,14 @@ args_context_t* init_args_context() {
     valarray_init(&ctx->args);
     valarray_init(&ctx->positional_args);
     valarray_init(&ctx->positional_args_description);
+    ctx->last_result = NULL;
     return ctx;
 }
 
 void deinit_args_context(args_context_t* ctx) {
     if (!ctx) return;
+    // reset env to free some fields if neededg
+    argparse_reset_env(ctx);
     // deinit graph
     if (ctx->ctx_graph)
         ctx_graph_free(ctx->ctx_graph);
@@ -484,7 +512,7 @@ arg_info_t* get_parameter_from_graph(args_context_t* ctx, const char* arg) {
     }
     // If this flag can become an end
     if (node->arg_info) {
-        return node->arg_info;
+        goto return_an_arg_info;
     }
     // returns the final node
     // if the node is not final node
@@ -510,11 +538,15 @@ arg_info_t* get_parameter_from_graph(args_context_t* ctx, const char* arg) {
     }
 
     if (node->_arg_sign == ACANE_SIGN) {
-        node->arg_info->_requirement_satisfied_sign = ACANE_SIGN;
-        return node->arg_info;
+        goto return_an_arg_info;
     }
     // no arg bound to this node
     return NULL;
+
+return_an_arg_info:
+    node->arg_info->_requirement_satisfied_sign = ACANE_SIGN;
+    node->arg_info->result_item->count++;
+    return node->arg_info;
 }
 
 const char* arg_info_to_string(arg_info_t* arg) {
@@ -529,6 +561,90 @@ const char* arg_info_to_string(arg_info_t* arg) {
 }
 
 
+parse_result_item_t* argparse_parse_result_item_init() {
+    parse_result_item_t* _r = (parse_result_item_t*)malloc(sizeof(parse_result_item_t));
+    if (!_r) return NULL;
+    valarray_init(&_r->args);
+    _r->count = 0;
+    return _r;
+}
+
+void argparse_parse_result_item_deinit(parse_result_item_t* _r) {
+    if (!_r) return;
+    valarray_deinit(_r->args);
+    free(_r);
+}
+
+
+parse_result_t* argparse_parse_result_init(args_context_t* ctx) {
+    parse_result_t* _r = (parse_result_t*) malloc(sizeof(parse_result_t*));
+    if (!_r) return NULL;
+    _r->keep_this_obj = 0;
+    valarray_init(&_r->args);
+    // assign current result to arg_info object
+    for (int i=0; i<ctx->args->size; i++) {
+        arg_info_t* _a = ctx->args->data[i];
+        parse_result_item_t* ri = argparse_parse_result_item_init();
+        _a->result_item = ri;
+        ri->arginfo = _a;
+        valarray_push_back(_r->args, (void*) ri);
+    }
+    assert(_r->args->size == ctx->args->size);
+    return _r;
+}
+
+void argparse_parse_result_deinit(parse_result_t* _r) {
+    if (!_r) return;
+    for (int i=0; i<_r->args->size; i++) {
+        argparse_parse_result_item_deinit((parse_result_item_t*)_r->args->data[i]);
+    }
+    valarray_deinit(_r->args);
+    free(_r);
+}
+
+parse_result_t* argparse_get_last_parse_result(args_context_t* ctx) {
+    if (!ctx) return NULL;
+    if (!ctx->last_result) return NULL;
+    ctx->last_result->keep_this_obj = 1; // transfer memory control to callee
+    return ctx->last_result;
+}
+
+int argparse_get_parsed_arg(parse_result_t* _r, const char* argname, parsed_argument_t* _out_a) {
+    if (!_r)   return FAIL;
+    if (!argname || !*argname) return FAIL;
+    parse_result_item_t* item;
+    for (int i=0; i<_r->args->size; i++) {
+        item = (parse_result_item_t*)_r->args->data[i];
+        // is short term
+        if (!argname[1] && item->arginfo->short_term) {
+            int short_term = *argname;
+            if (short_term == item->arginfo->short_term)
+                goto return_parsed_arg;
+        }
+        // is long term
+        else if (argname[1] && item->arginfo->long_term) {
+            if (!strcmp(argname, item->arginfo->long_term))
+                goto return_parsed_arg;
+        }
+    }
+    LOG(" no arg info for --%s", argname);
+    return FAIL;
+
+return_parsed_arg:
+    LOG(" got arginfo --%s", argname);
+    assert(item);
+    _out_a->count = item->count;
+    _out_a->parac = item->args->size;
+    _out_a->parav = (const char**) item->args->data;
+    return OK;
+}
+
+int argparse_count(parse_result_t* _r, const char* argname) {
+    parsed_argument_t _a;
+    int ret = argparse_get_parsed_arg(_r, argname, &_a);
+    if (ret != OK) return 0;
+    return _a.count;
+}
 
 void process_if_no_args(args_context_t* ctx) {
     // process if no need args
@@ -568,9 +684,34 @@ void process_if_no_args(args_context_t* ctx) {
     }                                                     \
 } while (0)
 
+int argparse_reset_env(args_context_t* ctx) {
+    if (!ctx) return FAIL;
+    // reset env vars in ctx
+    ctx->current_arg = NULL;
+    // reset env vars in args
+    for (int i=0; i<ctx->args->size; i++) {
+        arg_info_t* _a = ctx->args->data[i];
+        assert(_a);
+        _a->_requirement_satisfied_sign = 0;
+        _a->_arg_name_sign = 0;
+        _a->result_item = NULL;
+    }
+    // free result if needed
+    if (ctx->last_result && !ctx->last_result->keep_this_obj) {
+        argparse_parse_result_deinit(ctx->last_result);
+        ctx->last_result = NULL;
+    }
+    return OK;
+}
+
 int parse_args(args_context_t* ctx, int argc, const char** argv) {
     int __last_arg_idx = 0;
     int __global_positonal_argc = 0;
+    argparse_reset_env(ctx);
+    // initialize record of this time of parse
+    ctx->last_result = argparse_parse_result_init(ctx);
+    assert(ctx->last_result);
+
     if (argc <= 1)
         goto final_check;
     for (int i = 1; i <= argc; i++) {
@@ -648,6 +789,11 @@ int parse_args(args_context_t* ctx, int argc, const char** argv) {
             // if is args for certain parameters
             else {
                 LOG("positional arg for [%s]: %s", arg_info_to_string(ctx->current_arg), arg);
+
+                // Add this parameter (argv[i]) to current_arg
+                valarray_push_back(ctx->current_arg->result_item->args, (void*)argv[i]);
+                LOG("Added parameter to [%s] [arglist.size=%zu]: %s", arg_info_to_string(ctx->current_arg),
+                    ctx->current_arg->result_item->args->size, argv[i]);
 
                 // If current parameter has args, and no args anymore, do process
                 if ((i + 1 < argc && argv[i+1][0] == '-'   // next arg is a flag
