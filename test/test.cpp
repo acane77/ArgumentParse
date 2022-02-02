@@ -3,9 +3,7 @@
 #include <stdio.h>
 #include <string.h>
 
-args_context_t* ctx;
-
-void show_help_for_add(int parac, const char** parav) {
+void show_help_for_add(args_context_t* ctx, int parac, const char** parav) {
     printf("This is help for --add or build");
     exit(0);
 }
@@ -36,7 +34,7 @@ int cb_process_direcive_positional(int index, int argc, const char** argv) {
     }
     return 0;
 }
-void cb_process_add(int parac, const char** parav) {
+void cb_process_add(args_context_t* parent_ctx, int parac, const char** parav) {
     printf("args  \n");
     for (int i = 0; i < parac; i++) {
         printf("   [%d] %s\n", i, parav[i]);
@@ -58,11 +56,12 @@ void cb_process_encoding(int parac, const char** parav) {
     printf("set encoding to %s (-E)\n", parav[0]);
 }
 
-void show_help(int parac, const char** parav) {
+void show_help(args_context_t* ctx, int parac, const char** parav) {
     argparse_print_help_usage(ctx, "test", NULL, NULL);
     exit(0);
 }
 
+args_context_t* ctx;
 void argument_parse(int argc, const char** argv) {
     ctx = init_args_context();
     argparse_add_parameter(ctx, "read", 'r', "Read", 0, 0, 0, NULL);
@@ -70,7 +69,7 @@ void argument_parse(int argc, const char** argv) {
     argparse_add_parameter(ctx, "binary", 'b', "Binary", 0, 0, 0, NULL);
     argparse_add_parameter(ctx, "save", 's', "ave, or save to another file(s)", 0, 100, 0, NULL);
     argparse_set_parameter_name(ctx, "FILES...");
-    argparse_add_parameter(ctx, "help", 'h', "Show help message", 0, 0, 0, show_help);
+    argparse_add_help_parameter(ctx, "test", NULL);
     argparse_add_parameter(ctx, "verbose", 'v', "Use this flag to set verbose level", 0, 0, 0, NULL);
     argparse_add_parameter(ctx, "version", 0, "Version", 0, 0, 0, NULL);
     argparse_add_parameter(ctx, NULL, 'E', "Set encoding", 1, 1, 0, NULL);

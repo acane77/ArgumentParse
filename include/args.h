@@ -87,8 +87,8 @@ void deinit_args_context(args_context_t* ctx);
 
 /// Add parameter meta information
 /// \param ctx         pointer to context
-/// \param long_term   long term of the argument (e.g., --flag)
-/// \param short_term  short term of the argument (e.g., -f)
+/// \param long_term   long term of the argument (e.g., `--flag`)
+/// \param short_term  short term of the argument (e.g., `-f`)
 /// \param description description
 /// \param minc        min argument count
 /// \param maxc        min argument count
@@ -97,7 +97,7 @@ void deinit_args_context(args_context_t* ctx);
 /// \return OK or FAIL
 int argparse_add_parameter(args_context_t* ctx, const char* long_term, char short_term,
                    const char* description, int minc, int maxc, int required,
-                   void (*process)(int parac, const char** parav));
+                   void (*process)(args_context_t* ctx, int parac, const char** parav));
 
 /// Add parameter meta information (thread safe)
 /// \param ctx         pointer to context
@@ -112,7 +112,7 @@ int argparse_add_parameter(args_context_t* ctx, const char* long_term, char shor
 /// \return OK or FAIL
 int argparse_add_parameter_with_args(args_context_t* ctx, const char* long_term, char short_term,
                    const char* description, int minc, int maxc, int required, const char* arg_name,
-                   void (*process)(int parac, const char** parav));
+                   void (*process)(args_context_t* ctx, int parac, const char** parav));
 
 /// Set arg name for last added parameter (need to ensure thread safe by user)
 /// \param ctx       pointer to context
@@ -129,7 +129,7 @@ int argparse_set_parameter_name(args_context_t* ctx, const char* arg_name);
 /// \return OK or FAIL
 int argparse_add_parameter_long_term(args_context_t* ctx, const char* long_term,
                    const char* description, int required,
-                   void (*process)(int parac, const char** parav));
+                   void (*process)(args_context_t* ctx, int parac, const char** parav));
 
 /// Add parameter meta information (with only long term)
 /// \param ctx         pointer to context
@@ -142,7 +142,7 @@ int argparse_add_parameter_long_term(args_context_t* ctx, const char* long_term,
 /// \return OK or FAIL
 int argparse_add_parameter_long_term_with_args(args_context_t* ctx, const char* long_term,
                     const char* description, int minc, int maxc, int required,
-                    void (*process)(int parac, const char** parav));
+                    void (*process)(args_context_t* ctx, int parac, const char** parav));
 
 /// Add parameter meta information (with only short term)
 /// \param ctx         pointer to context
@@ -153,7 +153,7 @@ int argparse_add_parameter_long_term_with_args(args_context_t* ctx, const char* 
 /// \return OK or FAIL
 int argparse_add_parameter_short_term(args_context_t* ctx, char short_term,
                     const char* description, int required,
-                    void (*process)(int parac, const char** parav));
+                    void (*process)(args_context_t* ctx, int parac, const char** parav));
 
 /// Add parameter meta information (with only short term)
 /// \param ctx         pointer to context
@@ -166,7 +166,7 @@ int argparse_add_parameter_short_term(args_context_t* ctx, char short_term,
 /// \return OK or FAIL
 int argparse_add_parameter_short_term_with_args(args_context_t* ctx, char short_term,
                     const char* description, int minc, int maxc, int required,
-                    void (*process)(int parac, const char** parav));
+                    void (*process)(args_context_t* ctx, int parac, const char** parav));
 
 /// Add directive meta information
 /// \param ctx          pointer to context
@@ -177,9 +177,16 @@ int argparse_add_parameter_short_term_with_args(args_context_t* ctx, char short_
 /// \param process      callback to process function (this function returns 1 if is processed by directive)
 /// \return OK or FAIL
 int argparse_add_parameter_directive(args_context_t* ctx, const char* long_term, char short_term,
-                                     const char* description,  int required, void (*process)(int parac, const char** parav));
+                                     const char* description,  int required, void (*process)(args_context_t* ctx, int parac, const char** parav));
 
-/// Enable remove ambiguous (--) flags
+/// Add a `--help` parameter to context
+/// \param ctx          pointer to context
+/// \param program_name program name after `usage`
+/// \param description  description (pass NULL to use default)
+/// \return
+int argparse_add_help_parameter(args_context_t* ctx, const char* program_name, const char* description);
+
+/// Enable remove-ambiguous (i.e., `--`) flag
 /// \param ctx   pointer to context
 void argparse_enable_remove_ambiguous(args_context_t* ctx);
 
@@ -209,21 +216,23 @@ int argparse_set_directive_positional_arg_process(args_context_t* ctx, int (*pro
 int parse_args(args_context_t* ctx, int argc, const char** argv);
 
 /// Set help message display width
-///
-///                           |<---          width       --->|
-/// -h, --help                Show help message
+/// ```
+///                            |<---          width       --->|
+///  -h, --help                Show help message
+/// ```
 /// \param ctx   pointer to context
 /// \param width width of help message
 /// \return OK or FAIL
 int argparse_print_set_help_msg_width(args_context_t* ctx, int width);
 
 /// Set leading spaces for help message items
-///
-/// |<--- leading spaces --->|
-/// -h, --help                Show help message
+/// ```
+///  |<--- leading spaces --->|
+///  -h, --help                Show help message
+/// ```
 /// \param ctx   pointer to context
 /// \param width leading spaces of help message item
-/// \return
+/// \return OK or FAIL
 int argparse_print_set_help_msg_leading_spaces(args_context_t* ctx, int width);
 
 /// Sort parameters
@@ -244,7 +253,7 @@ int argparse_print_help_for_positional(args_context_t* ctx);
 /// Print usage message for registered parameters
 /// \param ctx           pointer to context
 /// \param program_name  program name shown after 'usage:'
-/// \return
+/// \return OK or FAIL
 int argparse_print_usage(args_context_t* ctx, const char* program_name);
 
 /// Print help and usage message for registered parameters
@@ -252,24 +261,24 @@ int argparse_print_usage(args_context_t* ctx, const char* program_name);
 /// \param program_name  program name shown after 'usage:'
 /// \param title_for_position title for positional args section, pass NULL to use default value (i.e., Positional Arguments)
 /// \param title_for_args title for args section, pass NULL to use default value (i.e., Arguments)
-/// \return
+/// \return OK or FAIL
 int argparse_print_help_usage(args_context_t* ctx, const char* program_name, const char* title_for_position, const char* title_for_args) ;
 
 /// Set file to output help and usage
 /// \param ctx   pointer to context
 /// \param file  pointer to FILE object (e.g., stdout, stderr)
-/// \return
+/// \return OK or FAIL
 int argparse_set_print_file(args_context_t* ctx, FILE* file);
 
 /// Reset context env (normally, no need to call this function)
 /// \param ctx   pointer to context
-/// \return
+/// \return OK or FAIL
 int argparse_reset_env(args_context_t* ctx);
 
 /// Get the last parse result after call parse_args()
 ///  * the callee will take control of this object, you should free it yourself
 /// \param ctx   pointer to context
-/// \return
+/// \return pointer to parse result
 parse_result_t* argparse_get_last_parse_result(args_context_t* ctx);
 
 /// Free parse result object
@@ -280,18 +289,14 @@ void argparse_parse_result_deinit(parse_result_t* _r);
 /// \param _r       pointer to parse result
 /// \param argname  argument name, can be both short term and long term
 /// \param _out_a   pointer to parsed_argument_t to receive value
-/// \return
+/// \return OK or FAIL
 int argparse_get_parsed_arg(parse_result_t* _r, const char* argname, parsed_argument_t* _out_a);
 
 ///  Get count of argument occurrence
 /// \param _r       pointer to parse result
 /// \param argname  argument name, can be both short term and long term
-/// \return
+/// \return count of argument occurrence
 int argparse_count(parse_result_t* _r, const char* argname);
-
-/// Unit test
-/// \return OK or FAIL
-int __acane__argparse_unit_test();
 
 #ifdef __cplusplus
 }
