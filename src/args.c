@@ -1,3 +1,5 @@
+/*! \file args.c */
+
 #include "args.h"
 
 #include <stdio.h>
