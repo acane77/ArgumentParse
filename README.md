@@ -17,6 +17,8 @@
 
 ## 使用方法
 
+文档：<a href="https://acane77.github.io/argparse_doc/args_8h.html">查看在线文档</a>或使用Doxygen生成文档。
+
 * 将include目录中的头文件加入项目文件中。
 * 编译src目录中的args.c或直接使用源码依赖。
 
