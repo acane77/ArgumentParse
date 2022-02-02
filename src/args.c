@@ -276,13 +276,18 @@ struct args_context {
     parse_result_t* last_result;
 };
 
+int argparse_default_error_handle(const char* __msg) {
+    fprintf(stderr, "error: %s\n", __msg);
+    return 0;
+}
+
 args_context_t* init_args_context() {
     args_context_t* ctx = (args_context_t*)malloc(sizeof(args_context_t));
     if (!ctx) return NULL;
     ctx->ctx_graph = ctx_graph_init();
     ctx->current_addi_arg_count = 0;
     ctx->current_arg = NULL;
-    ctx->error_handle = NULL;
+    ctx->error_handle = argparse_default_error_handle;
     ctx->process_positional = NULL;
     ctx->process_directive_positional = NULL;
     ctx->positional_maxc = 0;

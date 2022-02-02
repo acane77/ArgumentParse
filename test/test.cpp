@@ -9,10 +9,6 @@ void show_help_for_add(int parac, const char** parav) {
     printf("This is help for --add or build");
     exit(0);
 }
-int cb_error_report(const char* __msg) {
-    printf("error: %s\n", __msg);
-    return 0;
-}
 
 void cb_process_positional(int index, const char* arg) {
     printf("opening file #%d:  %s\n", index, arg);
@@ -26,7 +22,6 @@ int cb_process_direcive_positional(int index, int argc, const char** argv) {
         }
         args_context_t* ctx = init_args_context();
         argparse_add_parameter(ctx, "help", 'h', "Show help message", 0, 0, 0, show_help_for_add);
-        argparse_set_error_handle(ctx, cb_error_report);
         argparse_set_positional_arg_process(ctx, cb_process_positional);
         argparse_set_directive_positional_arg_process(ctx, cb_process_direcive_positional);
         if (!parse_args(ctx, argc, argv)) {
@@ -48,7 +43,6 @@ void cb_process_add(int parac, const char** parav) {
     }
     args_context_t* ctx = init_args_context();
     argparse_add_parameter(ctx, "help", 'h', "Show help message", 0, 0, 0, show_help_for_add);
-    argparse_set_error_handle(ctx, cb_error_report);
     argparse_set_positional_arg_process(ctx, cb_process_positional);
     argparse_set_directive_positional_arg_process(ctx, cb_process_direcive_positional);
     if (!parse_args(ctx, parac, parav)) {
@@ -83,7 +77,6 @@ void argument_parse(int argc, const char** argv) {
     argparse_set_parameter_name(ctx, "ENCODING");
     argparse_add_parameter_directive(ctx, "add", 'a', "Add", 0, cb_process_add);
     argparse_set_parameter_name(ctx, "NAME");
-    argparse_set_error_handle(ctx, cb_error_report);
     argparse_set_positional_arg_process(ctx, cb_process_positional);
     argparse_set_directive_positional_arg_process(ctx, cb_process_direcive_positional);
     argparse_set_positional_args(ctx, 1, 100);
