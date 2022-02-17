@@ -74,6 +74,7 @@ void argument_parse(int argc, const char** argv) {
     argparse_add_parameter(ctx, "version", 0, "Version", 0, 0, 0, NULL);
     argparse_add_parameter(ctx, NULL, 'E', "Set encoding", 1, 1, 0, NULL);
     argparse_set_parameter_name(ctx, "ENCODING");
+    argparse_set_error_message(ctx, "an encoding must be provided");
     argparse_add_parameter_directive(ctx, "add", 'a', "Add", 0, cb_process_add);
     argparse_set_parameter_name(ctx, "NAME");
     argpaese_add_short_leading_parameter(ctx, 'D', "define a variable (use as -Dname=value)", 0, NULL);

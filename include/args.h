@@ -120,6 +120,12 @@ int argparse_add_parameter_with_args(args_context_t* ctx, const char* long_term,
 /// \return
 int argparse_set_parameter_name(args_context_t* ctx, const char* arg_name);
 
+/// Set arg name for last added parameter (need to ensure thread safe by user)
+/// \param ctx       pointer to context
+/// \param msg       error message of last added parameter
+/// \return
+int argparse_set_error_message(args_context_t* ctx, const char* msg);
+
 /// Add parameter meta information (with only long term, without parameter)
 /// \param ctx         pointer to context
 /// \param long_term   long term of the argument (e.g., --flag)

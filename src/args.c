@@ -43,6 +43,7 @@ typedef struct arg_info {
     void        (*process)(args_context_t* ctx, int parac, const char** parav); // no free parav!
     int         required;
     const char* arg_name;
+    const char* err_msg;
     int         flag;
 
     // env
@@ -384,6 +385,7 @@ int regsiter_parameter_on_graph(args_context_t *ctx, const char *param, const ch
     final_node->arg_info->required = required;
     final_node->arg_info->arg_name = NULL;
     final_node->arg_info->flag = flag;
+    final_node->arg_info->err_msg = NULL;
     if (arginfo)
         *arginfo = final_node->arg_info;
     return OK;
@@ -443,6 +445,13 @@ int argparse_set_parameter_name(args_context_t* ctx, const char* arg_name) {
     arg_info_t* _a = ctx->args->data[ctx->args->size-1];
     _a->_arg_name_sign = ACANE_SIGN;
     _a->arg_name = arg_name;
+    return OK;
+}
+
+int argparse_set_error_message(args_context_t* ctx, const char* msg) {
+    if (!ctx) return FAIL;
+    arg_info_t* _a = ctx->args->data[ctx->args->size-1];
+    _a->err_msg = msg;
     return OK;
 }
 
@@ -694,9 +703,14 @@ void process_if_no_args(args_context_t* ctx) {
     if (ctx->current_arg    /* has arg parsed */ \
         && ctx->current_arg->max_parameter_count != 0  /* has additional arg */ \
         && ctx->current_addi_arg_count < ctx->current_arg->min_parameter_count /* not all args present */ \
-    ) {\
-        PARSEARG_REPORT_ERROR("at least %d additional arguments should provided for --%s",\
-                              ctx->current_arg->min_parameter_count, arg_info_to_string(ctx->current_arg));\
+    ) {                              \
+        if (ctx->current_arg->err_msg) {                  \
+            PARSEARG_REPORT_ERROR("--%s: %s", arg_info_to_string(ctx->current_arg), ctx->current_arg->err_msg);                             \
+        }                             \
+        else {                       \
+            PARSEARG_REPORT_ERROR("at least %d additional arguments should provided for --%s",\
+                                  ctx->current_arg->min_parameter_count, arg_info_to_string(ctx->current_arg)); \
+        }       \
     }                                    \
 } while (0)
 
