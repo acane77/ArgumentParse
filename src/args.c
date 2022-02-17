@@ -10,7 +10,7 @@
 
 #define OK     1
 #define FAIL   0
-//#define DEBUG
+#define DEBUG
 #ifdef DEBUG
 #define LOG(fmt, ...) printf("[%s:%d][ INFO  ] " fmt "\n", __FUNCTION__, __LINE__, ##__VA_ARGS__);
 #else
@@ -767,6 +767,12 @@ int parse_args(args_context_t* ctx, int argc, const char** argv) {
 //                    }
                     continue;
                 }
+                while (*(++arg)) {
+                    // if is --name=value
+                    if (*arg == '=') {
+                        goto process_inl_arg;
+                    }
+                }
                 LOG("process --%s", long_term);
                 GET_PARAMETER_FROM_GRAPH_AND_CHECK(long_term);
             }
@@ -777,11 +783,30 @@ int parse_args(args_context_t* ctx, int argc, const char** argv) {
                     // check addtional args for every parameter
                     CHECK_ADDITIONAL_ARGS();
 
+                    // if is -name=value
+                    if (*arg == '=') {
+                        goto process_inl_arg;
+                    }
+
                     char __s[2] = {0, 0};  __s[0] = *arg;
                     LOG("process -%s", __s);
                     GET_PARAMETER_FROM_GRAPH_AND_CHECK(__s);
-
                 }
+            }
+
+            if (0) {
+process_inl_arg:
+                arg++; // eat equal sign
+                // process inline positional arg xxx=value
+                LOG("inline positional arg for [%s]: %s", arg_info_to_string(ctx->current_arg), arg);
+
+                // Add this parameter (arg) to current_arg
+                valarray_push_back(ctx->current_arg->result_item->args, (void*)arg);
+                LOG("Added parameter to [%s] [arglist.size=%zu]: %s", arg_info_to_string(ctx->current_arg),
+                    ctx->current_arg->result_item->args->size, arg);
+
+                // add this to ensure only one parameter will be obtained
+                ctx->current_arg = NULL;
             }
 
         }
