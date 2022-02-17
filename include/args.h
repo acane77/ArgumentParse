@@ -168,7 +168,7 @@ int argparse_add_parameter_short_term_with_args(args_context_t* ctx, char short_
                     const char* description, int minc, int maxc, int required,
                     void (*process)(args_context_t* ctx, int parac, const char** parav));
 
-/// Add directive meta information
+/// Add directive meta information. directive flag is flag represents a sub-command, for exampple, 'add' in command 'git add'
 /// \param ctx          pointer to context
 /// \param long_term    long term of the argument (e.g., --flag)
 /// \param short_term   short term of the argument (e.g., -f)
@@ -178,6 +178,17 @@ int argparse_add_parameter_short_term_with_args(args_context_t* ctx, char short_
 /// \return OK or FAIL
 int argparse_add_parameter_directive(args_context_t* ctx, const char* long_term, char short_term,
                                      const char* description,  int required, void (*process)(args_context_t* ctx, int parac, const char** parav));
+
+/// Add short flag with immediate positional parameter.
+///   for example: `-Dname=value` in `gcc -Dname=value`
+/// \param ctx           pointer to context
+/// \param short_term    short term of the argument (e.g., -D)
+/// \param description   description
+/// \param required      if the parameter is required
+/// \param process       callback to additional process function (NULL if no other processes)
+/// \return OK or FAIL
+int argpaese_add_short_leading_parameter(args_context_t* ctx, char short_term, const char* description, int required,
+                                         void (*process)(args_context_t* ctx, int parac, const char** parav));
 
 /// Add a `--help` parameter to context
 /// \param ctx          pointer to context

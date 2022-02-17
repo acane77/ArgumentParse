@@ -76,6 +76,7 @@ void argument_parse(int argc, const char** argv) {
     argparse_set_parameter_name(ctx, "ENCODING");
     argparse_add_parameter_directive(ctx, "add", 'a', "Add", 0, cb_process_add);
     argparse_set_parameter_name(ctx, "NAME");
+    argpaese_add_short_leading_parameter(ctx, 'D', "define a variable (use as -Dname=value)", 0, NULL);
     argparse_set_positional_arg_process(ctx, cb_process_positional);
     argparse_set_directive_positional_arg_process(ctx, cb_process_direcive_positional);
     argparse_set_positional_args(ctx, 1, 100);
@@ -96,6 +97,12 @@ void argument_parse(int argc, const char** argv) {
     parsed_argument_t arg_save;
     argparse_get_parsed_arg(r, "save", &arg_save);
     printf("count of --save, -s:    %d\n", arg_save.count);
+    printf("   -- Parameter count:  %d\n", arg_save.parac);
+    for (int i=0; i<arg_save.parac; i++) {
+        printf("   -- [%d]:    %s\n", i, arg_save.parav[i]);
+    }
+    argparse_get_parsed_arg(r, "D", &arg_save);
+    printf("count of -D:            %d\n", arg_save.count);
     printf("   -- Parameter count:  %d\n", arg_save.parac);
     for (int i=0; i<arg_save.parac; i++) {
         printf("   -- [%d]:    %s\n", i, arg_save.parav[i]);

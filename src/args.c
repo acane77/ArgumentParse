@@ -10,7 +10,7 @@
 
 #define OK     1
 #define FAIL   0
-#define DEBUG
+//ma#define DEBUG
 #ifdef DEBUG
 #define LOG(fmt, ...) printf("[%s:%d][ INFO  ] " fmt "\n", __FUNCTION__, __LINE__, ##__VA_ARGS__);
 #else
@@ -20,6 +20,9 @@
 
 #define __ACANE_IN_OUT
 #define __ACANE_OUT
+
+#define FLAG_LEADING_PARAMETER  (1 << 0)
+#define _ACANE_HAS_FLAG(_arg_ptr, _flag) ((_arg_ptr)->flag & _flag)
 
 /* Node */
 struct valarray;
@@ -40,6 +43,7 @@ typedef struct arg_info {
     void        (*process)(args_context_t* ctx, int parac, const char** parav); // no free parav!
     int         required;
     const char* arg_name;
+    int         flag;
 
     // env
     int         _requirement_satisfied_sign;
@@ -346,10 +350,9 @@ int argparse_set_positional_arg_name(args_context_t* ctx, const char* name, cons
     return OK;
 }
 
-int regsiter_parameter_on_graph(args_context_t* ctx, const char* param,
-        const char* description, int minc, int maxc, int required,
-        void (*process)(args_context_t* ctx, int parac, const char** parav), int is_long_term, int is_directive,
-        arg_info_t** arginfo) {
+int regsiter_parameter_on_graph(args_context_t *ctx, const char *param, const char *description, int minc, int maxc,
+                                int required, void (*process)(args_context_t *, int, const char **), int is_long_term,
+                                int is_directive, arg_info_t **arginfo, int flag) {
     ctx_node_t* final_node = ctx_graph_add_nodes(ctx->ctx_graph, param);
     if (!final_node) {
         LOGE("add node for --%s failed", param);
@@ -380,15 +383,16 @@ int regsiter_parameter_on_graph(args_context_t* ctx, const char* param,
     final_node->arg_info->directive_flag = is_directive;
     final_node->arg_info->required = required;
     final_node->arg_info->arg_name = NULL;
+    final_node->arg_info->flag = flag;
     if (arginfo)
         *arginfo = final_node->arg_info;
     return OK;
 }
 
-int add_parameter_with_args_(args_context_t* ctx, const char* long_term, char short_term,
-                            const char* description, int minc, int maxc, int required,
-                            void (*process)(args_context_t* ctx, int parac, const char** parav),
-                            int is_directive) {
+int
+add_parameter_with_args_(args_context_t *ctx, const char *long_term, char short_term, const char *description, int minc,
+                         int maxc, int required, void (*process)(args_context_t *, int, const char **),
+                         int is_directive, int flag) {
     if (!ctx) return FAIL;
     if (!long_term && !short_term) {
         LOGE("at least one of long_term and short_term should be provided");
@@ -399,13 +403,15 @@ int add_parameter_with_args_(args_context_t* ctx, const char* long_term, char sh
     if (short_term) {
         char __short_term[2] = { 0, 0 };
         __short_term[0] = short_term;
-        int ret = regsiter_parameter_on_graph(ctx, __short_term, description, minc, maxc, required, process, 0, is_directive, &arginfo);
+        int ret = regsiter_parameter_on_graph(ctx, __short_term, description, minc, maxc, required, process, 0,
+                                              is_directive, &arginfo, flag);
         if (ret != OK)
             return ret;
     }
     // register long term
     if (long_term) {
-        int ret = regsiter_parameter_on_graph(ctx, long_term, description, minc, maxc, required, process, 1, is_directive, &arginfo);
+        int ret = regsiter_parameter_on_graph(ctx, long_term, description, minc, maxc, required, process, 1,
+                                              is_directive, &arginfo, flag);
         if (ret != OK)
             return ret;
     }
@@ -425,7 +431,7 @@ int argparse_add_parameter_with_args(args_context_t* ctx, const char* long_term,
     static volatile int _locked = 0;
     while (_locked);
     _locked = 1;
-    int ret = add_parameter_with_args_(ctx, long_term, short_term, description, minc, maxc, required, process, 0);
+    int ret = add_parameter_with_args_(ctx, long_term, short_term, description, minc, maxc, required, process, 0, 0);
     if (!ret) return FAIL;
     argparse_set_parameter_name(ctx, arg_name);
     _locked = 0;
@@ -443,14 +449,21 @@ int argparse_set_parameter_name(args_context_t* ctx, const char* arg_name) {
 int add_parameter_with_args(args_context_t* ctx, const char* long_term, char short_term,
                   const char* description, int minc, int maxc, int required,
                   void (*process)(args_context_t* ctx, int parac, const char** parav)) {
-    return add_parameter_with_args_(ctx, long_term, short_term, description, minc, maxc, required, process, 0);
+    return add_parameter_with_args_(ctx, long_term, short_term, description, minc, maxc, required, process, 0, 0);
 }
 
 int argparse_add_parameter_directive(args_context_t* ctx, const char* long_term, char short_term,
                                      const char* description,  int required, void (*process)(args_context_t* ctx, int parac, const char** parav)) {
     return add_parameter_with_args_(ctx, long_term, short_term, description, 0, PARAMETER_ARGS_COUNT_NO_LIMIT, required,
-                                    process, 1);
+                                    process, 1, 0);
 }
+
+int argpaese_add_short_leading_parameter(args_context_t* ctx, char short_term, const char* description, int required,
+                                         void (*process)(args_context_t* ctx, int parac, const char** parav)) {
+    return add_parameter_with_args_(ctx, NULL, short_term, description, 1, 1, required,
+                                    process, 0, FLAG_LEADING_PARAMETER);
+}
+
 
 int argparse_add_parameter(args_context_t* ctx, const char* long_term, char short_term,
     const char* description, int minc, int maxc, int required,
@@ -697,8 +710,10 @@ void process_if_no_args(args_context_t* ctx) {
     process_if_no_args(ctx);                         \
     /* process directive, return directly */\
     /* for example,   git add [-A "xxxxxx"]  */\
-    if (ctx->current_arg && ctx->current_arg->directive_flag) {\
-        ctx->current_arg->process(ctx, argc - __last_arg_idx, argv + __last_arg_idx);\
+    if (ctx->current_arg && ctx->current_arg->directive_flag) { \
+        LOG("  -- is a directive flag");                                             \
+        if (ctx->current_arg->process)               \
+            ctx->current_arg->process(ctx, argc - __last_arg_idx, argv + __last_arg_idx);\
         return OK;\
     }                                                     \
 } while (0)
@@ -783,7 +798,7 @@ int parse_args(args_context_t* ctx, int argc, const char** argv) {
                     // check addtional args for every parameter
                     CHECK_ADDITIONAL_ARGS();
 
-                    // if is -name=value
+                    // if is -n=value
                     if (*arg == '=') {
                         goto process_inl_arg;
                     }
@@ -791,10 +806,17 @@ int parse_args(args_context_t* ctx, int argc, const char** argv) {
                     char __s[2] = {0, 0};  __s[0] = *arg;
                     LOG("process -%s", __s);
                     GET_PARAMETER_FROM_GRAPH_AND_CHECK(__s);
+                    // check if is leading flag, e.g., -Dvariable=value
+                    LOG(" current flag: %d", ctx->current_arg->flag);
+                    if (ctx->current_arg && _ACANE_HAS_FLAG(ctx->current_arg, FLAG_LEADING_PARAMETER)) {
+                        if (*(arg+1)) // if not an empty arg
+                            goto process_inl_arg;
+                    }
                 }
             }
 
-            if (0) {
+            volatile const int false_cond = 0;
+            if (false_cond) {
 process_inl_arg:
                 arg++; // eat equal sign
                 // process inline positional arg xxx=value
