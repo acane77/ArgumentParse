@@ -77,6 +77,7 @@ void argument_parse(int argc, const char** argv) {
     argparse_add_parameter_directive(ctx, "add", 'a', "Add", 0, cb_process_add);
     argparse_set_parameter_name(ctx, "NAME");
     argpaese_add_short_leading_parameter(ctx, 'D', "define a variable (use as -Dname=value)", 0, NULL);
+    argparse_set_parameter_name(ctx, "NAME=VALUE");
     argparse_set_positional_arg_process(ctx, cb_process_positional);
     argparse_set_directive_positional_arg_process(ctx, cb_process_direcive_positional);
     argparse_set_positional_args(ctx, 1, 100);

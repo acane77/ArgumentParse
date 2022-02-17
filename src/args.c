@@ -809,7 +809,7 @@ int parse_args(args_context_t* ctx, int argc, const char** argv) {
                     // check if is leading flag, e.g., -Dvariable=value
                     LOG(" current flag: %d", ctx->current_arg->flag);
                     if (ctx->current_arg && _ACANE_HAS_FLAG(ctx->current_arg, FLAG_LEADING_PARAMETER)) {
-                        if (*(arg+1)) // if not an empty arg
+                        if (*(arg+1)) // if not an empty argg
                             goto process_inl_arg;
                     }
                 }
