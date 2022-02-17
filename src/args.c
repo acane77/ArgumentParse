@@ -531,7 +531,7 @@ arg_info_t* get_parameter_from_graph(args_context_t* ctx, const char* arg) {
     const char * __a = arg;
     if (!ctx) return NULL;
     ctx_node_t* node = ctx->ctx_graph->head;
-    for (; *arg; ++arg) {
+    for (; *arg && *arg != '='; ++arg) {
         int index = valarray_el_index_of(node->children, *arg);
         if (index >= 0) {
             assert(index < node->children->size);
@@ -782,14 +782,14 @@ int parse_args(args_context_t* ctx, int argc, const char** argv) {
 //                    }
                     continue;
                 }
+                LOG("process --%s", long_term);
+                GET_PARAMETER_FROM_GRAPH_AND_CHECK(long_term);
                 while (*(++arg)) {
                     // if is --name=value
                     if (*arg == '=') {
                         goto process_inl_arg;
                     }
                 }
-                LOG("process --%s", long_term);
-                GET_PARAMETER_FROM_GRAPH_AND_CHECK(long_term);
             }
             // if is -f flag
             else {

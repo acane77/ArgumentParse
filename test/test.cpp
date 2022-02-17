@@ -45,7 +45,7 @@ void cb_process_add(args_context_t* parent_ctx, int parac, const char** parav) {
     argparse_set_directive_positional_arg_process(ctx, cb_process_direcive_positional);
     if (!parse_args(ctx, parac, parav)) {
         argparse_print_usage(ctx, "test build");
-        printf("type `%s build --help` for more information\n", parav[0]);
+        printf("type `%s --addg --help` for more information\n", parav[0]);
         deinit_args_context(ctx);
         exit(1);
     }
