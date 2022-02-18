@@ -10,7 +10,7 @@
 
 #define OK     1
 #define FAIL   0
-//ma#define DEBUG
+//#define DEBUG
 #ifdef DEBUG
 #define LOG(fmt, ...) printf("[%s:%d][ INFO  ] " fmt "\n", __FUNCTION__, __LINE__, ##__VA_ARGS__);
 #else
@@ -809,13 +809,14 @@ int parse_args(args_context_t* ctx, int argc, const char** argv) {
             else {
                 // process combined multiply parameters: -abcd
                 while (*(++arg)) {
-                    // check addtional args for every parameter
-                    CHECK_ADDITIONAL_ARGS();
-
                     // if is -n=value
                     if (*arg == '=') {
+                        LOG("process inline equal sign");
                         goto process_inl_arg;
                     }
+
+                    // check addtional args for every parameter
+                    CHECK_ADDITIONAL_ARGS();
 
                     char __s[2] = {0, 0};  __s[0] = *arg;
                     LOG("process -%s", __s);
